@@ -95,10 +95,10 @@ async function testC() {
   });
   console.log('  Payout sent to Joe: batch', payout.batchId, '| status', payout.status);
 
-  // Payouts finish a few seconds later; check a few times.
+  // Sandbox payouts can take a minute or two; check every 5 s for up to 3 minutes.
   let status = payout.status;
-  for (let i = 0; i < 6 && !['SUCCESS', 'DENIED', 'CANCELED'].includes(status); i++) {
-    await sleep(3000);
+  for (let i = 0; i < 36 && !['SUCCESS', 'DENIED', 'CANCELED'].includes(status); i++) {
+    await sleep(5000);
     status = (await getPayout(payout.batchId)).batch_header.batch_status;
     console.log('  Payout status:', status);
   }

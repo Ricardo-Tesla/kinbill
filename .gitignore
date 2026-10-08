@@ -4,3 +4,4 @@ node_modules/
 *.db-journal
 dist/
 .DS_Store
+.kinbill-vault.json

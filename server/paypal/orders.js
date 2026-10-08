@@ -1,6 +1,7 @@
 // PayPal Orders v2 + Payments v2 helpers.
 // These are the only places in the app that move money (or hold / release it).
 
+import { randomUUID } from 'node:crypto';
 import { paypalRequest } from './client.js';
 
 // Where PayPal sends the buyer after they approve in the browser.
@@ -12,7 +13,11 @@ const DEFAULT_CANCEL_URL = 'https://example.com/kinbill/cancelled';
  * Build the JSON body for "create order". Exported so it can be unit-tested.
  * intent: 'CAPTURE' (pay now) or 'AUTHORIZE' (hold funds, decide later)
  */
-export function buildOrderBody({ intent, amount, currency = 'USD', payeeEmail, description, returnUrl, cancelUrl }) {
+export function buildOrderBody({
+  intent, amount, currency = 'USD', payeeEmail, description, returnUrl, cancelUrl,
+  vaultId,       // pay with Grace's saved PayPal (no browser needed)
+  saveToVault,   // first payment: ask PayPal to save Grace's PayPal for later
+}) {
   if (!['CAPTURE', 'AUTHORIZE'].includes(intent)) {
     throw new Error(`intent must be CAPTURE or AUTHORIZE, got ${intent}`);
   }
@@ -28,27 +33,55 @@ export function buildOrderBody({ intent, amount, currency = 'USD', payeeEmail, d
   // The person who receives the money (e.g. Joe the plumber), if different from our app account.
   if (payeeEmail) purchaseUnit.payee = { email_address: payeeEmail };
 
-  return {
-    intent,
-    purchase_units: [purchaseUnit],
-    payment_source: {
-      paypal: {
-        experience_context: {
-          brand_name: 'Kin-bill',
-          user_action: intent === 'CAPTURE' ? 'PAY_NOW' : 'CONTINUE',
-          shipping_preference: 'NO_SHIPPING',
-          return_url: returnUrl || DEFAULT_RETURN_URL,
-          cancel_url: cancelUrl || DEFAULT_CANCEL_URL,
-        },
-      },
+  // Saved PayPal: PayPal charges it directly, no approval page.
+  if (vaultId) {
+    return { intent, purchase_units: [purchaseUnit], payment_source: { paypal: { vault_id: vaultId } } };
+  }
+
+  const paypal = {
+    experience_context: {
+      brand_name: 'Kin-bill',
+      user_action: intent === 'CAPTURE' ? 'PAY_NOW' : 'CONTINUE',
+      shipping_preference: 'NO_SHIPPING',
+      return_url: returnUrl || DEFAULT_RETURN_URL,
+      cancel_url: cancelUrl || DEFAULT_CANCEL_URL,
     },
   };
+  if (saveToVault) {
+    paypal.attributes = {
+      vault: { store_in_vault: 'ON_SUCCESS', usage_type: 'MERCHANT', customer_type: 'CONSUMER' },
+    };
+  }
+  return { intent, purchase_units: [purchaseUnit], payment_source: { paypal } };
 }
 
-export async function createOrder(options) {
+// After a saveToVault order is authorized or captured, PayPal returns the saved id here.
+export function extractVaultId(order) {
+  return order?.payment_source?.paypal?.attributes?.vault?.id || null;
+}
+
+// Orders paid with a saved PayPal often finish in one call (status COMPLETED).
+// This returns the capture or authorization, finishing the order if PayPal didn't.
+export async function settleVaultedOrder(order) {
+  const pu = () => order.purchase_units?.[0]?.payments || {};
+  if (order.intent === 'CAPTURE') {
+    if (!pu().captures) order = await captureOrder(order.id);
+    return { order, capture: pu().captures?.[0] };
+  }
+  if (!pu().authorizations) order = (await authorizeOrder(order.id)).order;
+  return { order, authorization: pu().authorizations?.[0] };
+}
+
+// requestId: a unique id per payment. PayPal requires it when charging a saved PayPal,
+// and uses it to make sure a request sent twice (e.g. after a network glitch) only charges once.
+// Pass the same requestId when retrying the same payment.
+export async function createOrder({ requestId, ...options }) {
   const order = await paypalRequest('POST', '/v2/checkout/orders', {
     body: buildOrderBody(options),
-    headers: { Prefer: 'return=representation' },
+    headers: {
+      Prefer: 'return=representation',
+      'PayPal-Request-Id': requestId || randomUUID(),
+    },
   });
   return { order, approveUrl: findApproveUrl(order) };
 }
@@ -129,4 +162,15 @@ export async function sendPayout(options) {
 
 export function getPayout(batchId) {
   return paypalRequest('GET', `/v1/payments/payouts/${batchId}`);
+}
+
+// Sandbox payouts can take a minute or two. Checks every few seconds until it finishes.
+export async function waitForPayout(batchId, { intervalMs = 5000, timeoutMs = 180000, onStatus } = {}) {
+  const deadline = Date.now() + timeoutMs;
+  for (;;) {
+    const status = (await getPayout(batchId)).batch_header.batch_status;
+    onStatus?.(status);
+    if (['SUCCESS', 'DENIED', 'CANCELED'].includes(status) || Date.now() >= deadline) return status;
+    await new Promise((r) => setTimeout(r, intervalMs));
+  }
 }

@@ -20,7 +20,8 @@ Personas used everywhere (code samples, seed data, demo):
 2. App reads it back; Grace confirms by voice.
 3. LLM risk agent returns strict JSON (schema below).
 4. Rules engine (plain code, NOT the LLM) combines the score with Grace's limits:
-   - low risk and within limits -> create order with `intent: CAPTURE` -> paid now.
+   - low risk and within limits -> create order with `intent: CAPTURE` to Kin-bill ->
+     immediately send a PayPal Payout to the real payee.
    - otherwise -> create order with `intent: AUTHORIZE` and NO payee, so the hold sits in
      Kin-bill's own account -> alert David.
 5. David approves -> capture the authorization, then send a PayPal Payout to the real payee.
@@ -30,10 +31,14 @@ Personas used everywhere (code samples, seed data, demo):
 Payments use a PayPal wallet saved once during setup (vault, `usage_type: MERCHANT`),
 so later payments need no screens.
 
-Proven in sandbox (feature 2): CAPTURE straight to a different payee works
-(`purchase_units[].payee.email_address`). But void/capture of an authorization made out to
-a different payee fails with PERMISSION_DENIED (needs PayPal partner status). Therefore
-risky payments are held in Kin-bill's own account and forwarded with Payouts on approval.
+Proven in sandbox (features 2-3):
+- Void/capture of an authorization made out to a different payee fails with PERMISSION_DENIED.
+- Charging Grace's saved PayPal (vault_id) with a different payee fails with
+  BILLING_AGREEMENT_NOT_FOUND (her saved PayPal is an agreement with Kin-bill only).
+- Therefore EVERY payment is made to Kin-bill's own account, then forwarded to the real
+  payee with Payouts (instantly for low risk, after David approves for risky ones).
+- Orders charged with a vault_id need a `PayPal-Request-Id` header (also prevents double charges).
+- Sandbox payouts take ~1-2 minutes to reach SUCCESS.
 
 ## Risk agent output schema (must be enforced, e.g. via tool use / JSON schema)
 ```json

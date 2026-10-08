@@ -14,8 +14,9 @@ Built for the PayPal "Build What's Next with PayPal and AI" hackathon. Sandbox o
 | Feature | State |
 | --- | --- |
 | 1. Server skeleton, health check, PayPal token helper | Done |
-| 2. Sandbox spike: capture, authorize then void, authorize then capture | Script ready, run it locally |
-| 3–10 | Coming |
+| 2. Sandbox spike: capture, hold then void, hold then capture then payout | Done (passed in sandbox) |
+| 3. Link PayPal once (vault), pay with no browser | Spike script ready: `npm run spike:vault` |
+| 4–10 | Coming |
 
 ## Requirements
 
@@ -42,6 +43,13 @@ npm run spike
 For each test, open the printed link, log in as the sandbox **buyer** (Grace), approve,
 then press Enter in the terminal. Expected: three PASS lines, and Joe's sandbox account
 shows $80 and $150 received, but not the voided $600.
+
+## Feature 3: link PayPal once
+
+```bash
+npm run spike:vault          # V1 needs Grace's approval in the browser once
+npm run spike:vault -- V2    # rerun V2 and V3 with the saved link, no browser
+```
 
 ## Project layout
 

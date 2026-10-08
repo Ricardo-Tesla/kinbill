@@ -7,7 +7,7 @@ process.env.PAYPAL_CLIENT_ID = 'test-id';
 process.env.PAYPAL_CLIENT_SECRET = 'test-secret';
 
 const { getAccessToken, paypalRequest, PayPalError, _resetTokenCache } = await import('../server/paypal/client.js');
-const { buildOrderBody, findApproveUrl, authorizeOrder, buildPayoutBody } = await import('../server/paypal/orders.js');
+const { buildOrderBody, findApproveUrl, authorizeOrder, buildPayoutBody, extractVaultId, settleVaultedOrder, createOrder, waitForPayout } = await import('../server/paypal/orders.js');
 
 function jsonResponse(status, body) {
   return new Response(body === undefined ? '' : JSON.stringify(body), { status });
@@ -92,4 +92,65 @@ test('buildPayoutBody pays the receiver by email with a unique id', () => {
   assert.equal(body.items[0].amount.value, '150.00');
   assert.equal(body.sender_batch_header.sender_batch_id, 'ref-1');
   assert.throws(() => buildPayoutBody({ amount: 10 }), /receiverEmail/);
+});
+
+test('buildOrderBody with vaultId pays with the saved PayPal and no approval page', () => {
+  const body = buildOrderBody({ intent: 'CAPTURE', amount: 25, vaultId: 'VAULT1', payeeEmail: 'joe@example.com' });
+  assert.deepEqual(body.payment_source, { paypal: { vault_id: 'VAULT1' } });
+  assert.equal(body.purchase_units[0].payee.email_address, 'joe@example.com');
+});
+
+test('buildOrderBody with saveToVault asks PayPal to save Grace\'s PayPal', () => {
+  const body = buildOrderBody({ intent: 'AUTHORIZE', amount: 1, saveToVault: true });
+  assert.equal(body.payment_source.paypal.attributes.vault.store_in_vault, 'ON_SUCCESS');
+  assert.equal(body.payment_source.paypal.attributes.vault.usage_type, 'MERCHANT');
+});
+
+test('extractVaultId reads the saved id from an order', () => {
+  assert.equal(extractVaultId({ payment_source: { paypal: { attributes: { vault: { id: 'V9' } } } } }), 'V9');
+  assert.equal(extractVaultId({}), null);
+});
+
+test('settleVaultedOrder uses PayPal\'s one-step result without extra calls', async () => {
+  const fetchMock = mock.method(globalThis, 'fetch', async () => { throw new Error('should not call PayPal'); });
+  const order = { id: 'O1', intent: 'CAPTURE', status: 'COMPLETED', purchase_units: [{ payments: { captures: [{ status: 'COMPLETED' }] } }] };
+  const { capture } = await settleVaultedOrder(order);
+  assert.equal(capture.status, 'COMPLETED');
+  assert.equal(fetchMock.mock.callCount(), 0);
+});
+
+test('settleVaultedOrder authorizes when PayPal did not finish the order', async () => {
+  mock.method(globalThis, 'fetch', async (url) =>
+    url.endsWith('/token')
+      ? jsonResponse(200, { access_token: 't', expires_in: 3600 })
+      : jsonResponse(201, { id: 'O2', purchase_units: [{ payments: { authorizations: [{ id: 'A2', status: 'CREATED' }] } }] }),
+  );
+  const { authorization } = await settleVaultedOrder({ id: 'O2', intent: 'AUTHORIZE', status: 'APPROVED', purchase_units: [{}] });
+  assert.equal(authorization.id, 'A2');
+});
+
+test('createOrder always sends a PayPal-Request-Id, and reuses one when given', async () => {
+  const seen = [];
+  mock.method(globalThis, 'fetch', async (url, opts) => {
+    if (url.endsWith('/token')) return jsonResponse(200, { access_token: 't', expires_in: 3600 });
+    seen.push(opts.headers['PayPal-Request-Id']);
+    return jsonResponse(201, { id: 'O3', status: 'COMPLETED', links: [] });
+  });
+  await createOrder({ intent: 'CAPTURE', amount: 25, vaultId: 'V1' });
+  await createOrder({ intent: 'CAPTURE', amount: 25, vaultId: 'V1', requestId: 'pay-123' });
+  assert.match(seen[0], /^[0-9a-f-]{36}$/);
+  assert.equal(seen[1], 'pay-123');
+});
+
+test('waitForPayout keeps checking until PayPal reports SUCCESS', async () => {
+  const statuses = ['PENDING', 'PROCESSING', 'SUCCESS'];
+  mock.method(globalThis, 'fetch', async (url) =>
+    url.endsWith('/token')
+      ? jsonResponse(200, { access_token: 't', expires_in: 3600 })
+      : jsonResponse(200, { batch_header: { batch_status: statuses.shift() } }),
+  );
+  const seen = [];
+  const final = await waitForPayout('B1', { intervalMs: 1, onStatus: (s) => seen.push(s) });
+  assert.equal(final, 'SUCCESS');
+  assert.deepEqual(seen, ['PENDING', 'PROCESSING', 'SUCCESS']);
 });
