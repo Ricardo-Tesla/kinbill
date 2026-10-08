@@ -1,0 +1,21 @@
+{
+  "name": "kinbill",
+  "version": "0.1.0",
+  "description": "Kin-bill: a voice-first PayPal payment assistant where risky payments wait for a trusted family member's approval.",
+  "type": "module",
+  "private": true,
+  "license": "MIT",
+  "engines": {
+    "node": ">=22.9"
+  },
+  "scripts": {
+    "dev": "node --watch --env-file-if-exists=.env server/index.js",
+    "start": "node --env-file-if-exists=.env server/index.js",
+    "test": "node --test",
+    "check:paypal": "node --env-file-if-exists=.env scripts/check-paypal.js",
+    "spike": "node --env-file-if-exists=.env scripts/spike-paypal.js"
+  },
+  "dependencies": {
+    "express": "^4.21.2"
+  }
+}
