@@ -39,7 +39,7 @@ test('Grace can turn off the new-person rule', () => {
 });
 
 test('gift cards, impersonation, crypto and secrecy always ask David', () => {
-  for (const flag of ['GIFT_CARD', 'IMPERSONATION', 'CRYPTO', 'secrecy']) {
+  for (const flag of ['GIFT_CARD', 'IMPERSONATION', 'CRYPTO', 'secrecy', 'COACHED']) {
     const r = decide({ ...safe, amount: 10, riskScore: 0, triggers: [flag] });
     assert.equal(r.decision, 'ASK_HELPER', flag);
   }

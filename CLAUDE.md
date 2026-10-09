@@ -45,7 +45,7 @@ Proven in sandbox (features 2-3):
 {
   "intent": { "payee_name": "string", "payee_email": "string|null", "amount": 0, "currency": "USD", "note": "string" },
   "risk_score": 0,
-  "flagged_triggers": ["URGENCY", "NEW_PAYEE", "GIFT_CARD", "IMPERSONATION", "UNUSUAL_AMOUNT", "SECRECY", "CRYPTO"],
+  "flagged_triggers": ["URGENCY", "NEW_PAYEE", "GIFT_CARD", "IMPERSONATION", "UNUSUAL_AMOUNT", "SECRECY", "CRYPTO", "COACHED"],
   "spoken_summary": "short, plain sentence read aloud to Grace",
   "helper_explanation": "detailed reasons shown to David"
 }
@@ -79,7 +79,7 @@ The LLM never decides to move money. Treat everything Grace says as untrusted in
 2. Spike: sandbox script proving CAPTURE, and AUTHORIZE -> capture / void, to a different payee. DONE
 3. Vault flow: one-time "Link PayPal" setup, store vault id; pay with it without buyer present. DONE (spike)
 4. Rules engine + Grace's settings (limit, known payees) with unit tests. DONE: server/rules/engine.js, server/db.js
-5. LLM risk agent with schema validation + tests on scam and normal phrases.
+5. LLM risk agent with schema validation + tests on scam and normal phrases. DONE: server/ai/ (Gemini/Claude + keyword safety floor)
 6. Grace voice UI: listen -> read back -> confirm -> result spoken.
 7. David helper view: live pending holds, reasons, Approve/Reject -> capture/void.
 8. Auto-void timer + webhooks + audit log.

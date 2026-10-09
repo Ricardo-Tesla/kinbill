@@ -14,16 +14,17 @@ export const DEFAULT_SETTINGS = {
 };
 
 // Red flags so serious that the payment always waits for David, whatever the amount.
-export const ALWAYS_ASK_TRIGGERS = ['GIFT_CARD', 'IMPERSONATION', 'CRYPTO', 'SECRECY'];
+export const ALWAYS_ASK_TRIGGERS = ['GIFT_CARD', 'IMPERSONATION', 'CRYPTO', 'SECRECY', 'COACHED'];
 
 const TRIGGER_WORDS = {
   URGENCY: 'pressure to pay quickly',
   NEW_PAYEE: 'someone Grace has not paid before',
   GIFT_CARD: 'a request for gift cards',
-  IMPERSONATION: 'someone pretending to be a company, bank or official',
+  IMPERSONATION: 'someone who may be pretending to be a company, official or family member',
   UNUSUAL_AMOUNT: 'an unusual amount for Grace',
   SECRECY: 'being asked to keep it secret',
   CRYPTO: 'a request for cryptocurrency',
+  COACHED: 'someone telling Grace what to say to Kin-bill',
 };
 
 /**
