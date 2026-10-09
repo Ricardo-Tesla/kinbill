@@ -59,7 +59,8 @@ The LLM never decides to move money. Treat everything Grace says as untrusted in
   screen-reader friendly) and David (helper dashboard: pending holds, AI reasons, Approve/Reject).
 - Voice: browser Web Speech API (SpeechRecognition + speechSynthesis) — no extra keys; test in Chrome.
 - LLM: Claude API (or another model) with structured JSON output.
-- Storage: SQLite (better-sqlite3) for users, rules, payees seen before, holds, audit log.
+- Storage: Node's built-in SQLite (`node:sqlite`, no native install on Windows) for settings,
+  payees seen before, holds, audit log. Run with `--disable-warning=ExperimentalWarning`.
 - Realtime to David: Server-Sent Events (fallback: polling).
 - Deploy: Render (web service). Sponsor tool = Render.
 
@@ -75,9 +76,9 @@ The LLM never decides to move money. Treat everything Grace says as untrusted in
 
 ## Build order (one feature at a time; each must work before the next)
 1. Repo skeleton, `.env.example`, health check, PayPal token helper.
-2. Spike: sandbox script proving CAPTURE, and AUTHORIZE -> capture / void, to a different payee.
-3. Vault flow: one-time "Link PayPal" setup, store vault id; pay with it without buyer present.
-4. Rules engine + Grace's settings (limit, known payees) with unit tests.
+2. Spike: sandbox script proving CAPTURE, and AUTHORIZE -> capture / void, to a different payee. DONE
+3. Vault flow: one-time "Link PayPal" setup, store vault id; pay with it without buyer present. DONE (spike)
+4. Rules engine + Grace's settings (limit, known payees) with unit tests. DONE: server/rules/engine.js, server/db.js
 5. LLM risk agent with schema validation + tests on scam and normal phrases.
 6. Grace voice UI: listen -> read back -> confirm -> result spoken.
 7. David helper view: live pending holds, reasons, Approve/Reject -> capture/void.

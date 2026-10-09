@@ -15,8 +15,9 @@ Built for the PayPal "Build What's Next with PayPal and AI" hackathon. Sandbox o
 | --- | --- |
 | 1. Server skeleton, health check, PayPal token helper | Done |
 | 2. Sandbox spike: capture, hold then void, hold then capture then payout | Done (passed in sandbox) |
-| 3. Link PayPal once (vault), pay with no browser | Spike script ready: `npm run spike:vault` |
-| 4–10 | Coming |
+| 3. Link PayPal once (vault), pay with no browser | Done (passed in sandbox) |
+| 4. Grace's rules + database (settings, people paid before) | Done: `npm run try:rules` |
+| 5–10 | Coming |
 
 ## Requirements
 
@@ -59,7 +60,9 @@ server/
   app.js            routes (health checks so far)
   config.js         reads .env; refuses to run against live PayPal
   paypal/client.js  OAuth token + request helper
-  paypal/orders.js  create / capture / authorize / void
+  paypal/orders.js  create / capture / authorize / void / payouts
+  rules/engine.js   Grace's rules: pay now or ask David
+  db.js             SQLite (built into Node): settings, people paid before
 scripts/            check-paypal.js, spike-paypal.js
 test/               node:test unit tests with a fake fetch
 ```

@@ -9,12 +9,13 @@
     "node": ">=22.9"
   },
   "scripts": {
-    "dev": "node --watch --env-file-if-exists=.env server/index.js",
-    "start": "node --env-file-if-exists=.env server/index.js",
-    "test": "node --test",
+    "dev": "node --watch --disable-warning=ExperimentalWarning --env-file-if-exists=.env server/index.js",
+    "start": "node --disable-warning=ExperimentalWarning --env-file-if-exists=.env server/index.js",
+    "test": "node --disable-warning=ExperimentalWarning --test",
     "check:paypal": "node --env-file-if-exists=.env scripts/check-paypal.js",
     "spike": "node --env-file-if-exists=.env scripts/spike-paypal.js",
-    "spike:vault": "node --env-file-if-exists=.env scripts/spike-vault.js"
+    "spike:vault": "node --env-file-if-exists=.env scripts/spike-vault.js",
+    "try:rules": "node scripts/try-rules.js"
   },
   "dependencies": {
     "express": "^4.21.2"
