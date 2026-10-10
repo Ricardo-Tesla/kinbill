@@ -2,7 +2,7 @@
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { openDb, seedDemoContacts, setAccountValue, getPayment, getContact, findContactByName, getVaultId } from '../server/db.js';
+import { openDb, seedDemoContacts, setAccountValue, getPayment, getContact, findContactByName, getVaultId, listContacts } from '../server/db.js';
 import { createPaymentService } from '../server/payments/service.js';
 
 // A fake AI that returns whatever the test wants.
@@ -42,6 +42,7 @@ function fakePayPal({ failCharge = false, failPayout = false, payoutStatus = 'SU
     extractVaultId(order) { return order?.payment_source?.paypal?.attributes?.vault?.id || null; },
     async getOrder() { return {}; },
     async voidAuthorization(id) { calls.push(['void', id]); },
+    async captureAuthorization(id) { calls.push(['captureAuth', id]); return { id: 'CAP-HELD', status: 'COMPLETED' }; },
   };
 }
 
@@ -168,4 +169,61 @@ test('an older database gets the new column added automatically', async () => {
   assert.ok(cols.includes('grace_reasons'));
   db.close();
   fs.rmSync(path, { force: true });
+});
+
+// ---- David's decisions ----
+
+async function heldPayment(ai) {
+  const ctx = setup({ ai });
+  const r = await ctx.service.createRequest('test');
+  await ctx.service.confirm(r.payment.id);
+  return { ...ctx, id: r.payment.id };
+}
+
+test('David approves a held payment to Sam: held money is taken, then paid out to Sam', async () => {
+  const { db, service, paypal, id } = await heldPayment({ intent: { payee_name: 'Sam', amount: 40 } });
+  const changes = [];
+  service.events.on('change', (e) => changes.push(e.status));
+  const r = await service.approve(id);
+  assert.equal(r.payment.status, 'PAYING');
+  assert.equal(r.payment.decidedBy, 'helper');
+  assert.ok(paypal.calls.some(([n, a]) => n === 'captureAuth' && a === 'AUTH1'));
+  assert.equal(paypal.calls.find(([n]) => n === 'payout')[1].receiverEmail, 'joe@example.com');
+  await service.idle();
+  assert.equal(getPayment(db, id).status, 'PAID');
+  assert.equal(findContactByName(db, 'Sam').times_paid, 1, 'Sam is now known');
+  assert.ok(changes.includes('PAYING') && changes.includes('PAID'), 'screens are told about changes');
+});
+
+test('David rejects: the hold is cancelled and nothing is paid out', async () => {
+  const { service, paypal, id } = await heldPayment({ intent: { payee_name: 'PayPal', amount: 600 }, risk_score: 95 });
+  const r = await service.reject(id);
+  assert.equal(r.payment.status, 'REJECTED');
+  assert.ok(paypal.calls.some(([n, a]) => n === 'void' && a === 'AUTH1'));
+  assert.equal(paypal.calls.some(([n]) => n === 'payout'), false);
+  await assert.rejects(service.approve(id), (e) => e.code === 'NOT_HELD', 'cannot approve after rejecting');
+});
+
+test('approving someone not in contacts needs their PayPal email, then adds them', async () => {
+  const { db, service, paypal, id } = await heldPayment({ intent: { payee_name: 'Bob', amount: 30 } });
+  await assert.rejects(service.approve(id), (e) => e.code === 'EMAIL_REQUIRED');
+  await assert.rejects(service.approve(id, { email: 'not-an-email' }), (e) => e.code === 'EMAIL_REQUIRED');
+  const r = await service.approve(id, { email: 'Bob@Example.com' });
+  assert.equal(r.payment.payeeName, 'Bob');
+  assert.equal(r.payment.inContacts, true);
+  assert.ok(listContacts(db).some((c) => c.name === 'Bob' && c.email === 'bob@example.com'));
+  assert.equal(paypal.calls.find(([n]) => n === 'payout')[1].receiverEmail, 'bob@example.com');
+});
+
+test('only HELD payments can be decided', async () => {
+  const { service } = setup();
+  const r = await service.createRequest('Pay Joe 80 dollars');
+  await assert.rejects(service.reject(r.payment.id), (e) => e.code === 'NOT_HELD');
+});
+
+test('helper overview lists waiting payments separately from history', async () => {
+  const { service, id } = await heldPayment({ intent: { payee_name: 'Sam', amount: 40 } });
+  const o = service.helperOverview();
+  assert.deepEqual(o.held.map((p) => p.id), [id]);
+  assert.ok(o.history.some((p) => p.id === id));
 });

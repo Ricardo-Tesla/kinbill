@@ -19,7 +19,8 @@ Built for the PayPal "Build What's Next with PayPal and AI" hackathon. Sandbox o
 | 4. Grace's rules + database (settings, people paid before) | Done: `npm run try:rules` |
 | 5. AI scam checker (Gemini or Claude, keyword safety floor) | Done: `npm run try:ai` |
 | 6. Grace's voice screen: speak, hear it read back, yes/no, real sandbox payment | Done: `npm run dev`, open /grace.html |
-| 7–10 | Coming |
+| 7. David's helper screen: held payments, reasons, approve / reject, live updates, AG Grid history | Done: open /david.html |
+| 8–10 | Coming |
 
 ## Requirements
 
@@ -70,6 +71,17 @@ Open **http://localhost:3000/grace.html** in Chrome or Edge (best for voice).
 - If PayPal isn't connected yet, press **Connect PayPal** (one time, $1 check released straight away).
   A link saved by `npm run spike:vault` is reused automatically.
 
+## Feature 7: David's helper screen
+
+Open **http://localhost:3000/david.html** and enter the `HELPER_PIN` from `.env` (default in `.env.example`: `2468`).
+
+- **Waiting for you**: every held payment with the amount, what Grace said, the scam-risk score, the AI's explanation and the reasons.
+- **Approve and pay**: Kin-bill captures the held money and pays it out to the contact (PayPal Payouts).
+  If the person is not in Grace's contacts, David must enter their PayPal email; they are added to her contacts.
+- **Reject**: the hold is voided; no money moves.
+- Updates live (Server-Sent Events). Grace's screen tells her David's decision if her "Paused" box is still open.
+- **All payments**: history table built with **AG Grid** (sponsor), served from `node_modules`, no CDN.
+
 ## Project layout
 
 ```
@@ -83,7 +95,7 @@ server/
   db.js             SQLite (built into Node): settings, contacts, PayPal link, payments
   ai/               AI scam checker + keyword safety floor
   payments/service.js  the payment flow: read back, pay now or hold for David
-public/             Grace's screen (grace.html/js), styles, landing page
+public/             Grace's screen (grace.*), David's screen (david.*), styles, landing page
 scripts/            check-paypal.js, spike-paypal.js
 test/               node:test unit tests with a fake fetch
 ```

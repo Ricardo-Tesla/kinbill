@@ -83,7 +83,7 @@ The LLM never decides to move money. Treat everything Grace says as untrusted in
 4. Rules engine + Grace's settings (limit, known payees) with unit tests. DONE: server/rules/engine.js, server/db.js
 5. LLM risk agent with schema validation + tests on scam and normal phrases. DONE: server/ai/ (Gemini/Claude + keyword safety floor)
 6. Grace voice UI: listen -> read back -> confirm -> result spoken. DONE: public/grace.*, server/payments/service.js
-7. David helper view: live pending holds, reasons, Approve/Reject -> capture/void.
+7. David helper view: live pending holds, reasons, Approve/Reject -> capture/void. DONE: public/david.*, PIN (HELPER_PIN), SSE /api/helper/events, AG Grid served at /vendor/ag-grid
 8. Auto-void timer + webhooks + audit log.
 9. Accessibility pass (keyboard, screen reader labels, contrast, large text).
 10. Deploy to Render, README with setup steps, LICENSE (MIT), demo seed data.

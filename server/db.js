@@ -49,6 +49,8 @@ export function openDb(path = process.env.DB_PATH || 'kinbill.db') {
       capture_id TEXT,
       payout_batch_id TEXT,
       hold_expires_at TEXT,
+      decided_by TEXT,                -- who approved/rejected a held payment (helper | timer)
+      decided_at TEXT,
       error TEXT
     );
   `);
@@ -60,6 +62,8 @@ export function openDb(path = process.env.DB_PATH || 'kinbill.db') {
 function migrate(db) {
   const has = (table, col) => db.prepare(`PRAGMA table_info(${table})`).all().some((c) => c.name === col);
   if (!has('payments', 'grace_reasons')) db.exec('ALTER TABLE payments ADD COLUMN grace_reasons TEXT');
+  if (!has('payments', 'decided_by')) db.exec('ALTER TABLE payments ADD COLUMN decided_by TEXT');
+  if (!has('payments', 'decided_at')) db.exec('ALTER TABLE payments ADD COLUMN decided_at TEXT');
 }
 
 // ---- Settings ----
@@ -181,7 +185,8 @@ export function getPayment(db, id) {
 }
 
 export function updatePayment(db, id, changes) {
-  const allowed = ['status', 'order_id', 'authorization_id', 'capture_id', 'payout_batch_id', 'hold_expires_at', 'error'];
+  const allowed = ['status', 'order_id', 'authorization_id', 'capture_id', 'payout_batch_id', 'hold_expires_at',
+    'decided_by', 'decided_at', 'contact_id', 'error'];
   const keys = Object.keys(changes).filter((k) => allowed.includes(k));
   if (!keys.length) return getPayment(db, id);
   db.prepare(`UPDATE payments SET ${keys.map((k) => `${k} = ?`).join(', ')}, updated_at = ? WHERE id = ?`)
@@ -189,11 +194,15 @@ export function updatePayment(db, id, changes) {
   return getPayment(db, id);
 }
 
-export function listPayments(db, { status } = {}) {
+export function listPayments(db, { status, limit = 200 } = {}) {
   const rows = status
-    ? db.prepare('SELECT id FROM payments WHERE status = ? ORDER BY id DESC').all(status)
-    : db.prepare('SELECT id FROM payments ORDER BY id DESC').all();
+    ? db.prepare('SELECT id FROM payments WHERE status = ? ORDER BY id DESC LIMIT ?').all(status, limit)
+    : db.prepare('SELECT id FROM payments ORDER BY id DESC LIMIT ?').all(limit);
   return rows.map((r) => getPayment(db, r.id));
+}
+
+export function findContactByEmail(db, email) {
+  return db.prepare('SELECT * FROM contacts WHERE email = ?').get(String(email).toLowerCase()) || null;
 }
 
 function positiveNumber(v, name) {

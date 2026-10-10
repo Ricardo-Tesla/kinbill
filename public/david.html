@@ -5,13 +5,74 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Kin-bill: helper</title>
   <link rel="stylesheet" href="/styles.css">
+  <link rel="stylesheet" href="/david.css">
 </head>
-<body>
-  <main class="wrap">
-    <p class="brand">Kin-bill</p>
-    <h1 class="prompt">David's helper screen</h1>
-    <p>Coming in the next feature: see payments waiting for your check, with the reasons, and approve or reject them.</p>
-    <a class="button" href="/">Back</a>
-  </main>
+<body class="helper">
+  <div class="wrap wide">
+    <header>
+      <p class="brand">Kin-bill <span class="tag">Helper</span></p>
+      <p class="hello" id="hello">Hello</p>
+    </header>
+
+    <!-- PIN gate -->
+    <section id="pin-gate" class="card hidden" aria-labelledby="pin-title">
+      <h1 id="pin-title" class="h-small">Enter your helper PIN</h1>
+      <p>Only the person Grace trusts can see and approve her payments.</p>
+      <form id="pin-form" class="typed-form">
+        <label class="sr-only" for="pin">Helper PIN</label>
+        <input id="pin" type="password" inputmode="numeric" autocomplete="current-password" placeholder="PIN">
+        <button class="primary" type="submit">Open</button>
+      </form>
+      <p id="pin-error" class="error" role="alert"></p>
+    </section>
+
+    <main id="main" class="hidden">
+      <section aria-labelledby="waiting-title">
+        <h1 id="waiting-title" class="h-small">Waiting for you <span id="waiting-count" class="count"></span></h1>
+        <p id="live-state" class="note">Connecting for live updates...</p>
+        <div id="held-list"></div>
+        <p id="nothing-waiting" class="empty hidden">Nothing is waiting. Grace's payments are going through normally.</p>
+      </section>
+
+      <section aria-labelledby="history-title">
+        <h2 id="history-title" class="h-small">All payments</h2>
+        <div id="history-grid" class="grid" role="region" aria-label="All of Grace's payments"></div>
+      </section>
+    </main>
+
+    <div id="live" class="sr-only" aria-live="polite" aria-atomic="true"></div>
+  </div>
+
+  <template id="held-template">
+    <article class="card held">
+      <div class="held-top">
+        <div>
+          <p class="held-amount"></p>
+          <p class="held-payee"></p>
+        </div>
+        <p class="risk"><span class="risk-score"></span><span class="risk-label">scam risk</span></p>
+      </div>
+      <p class="held-said"></p>
+      <p class="held-ai"></p>
+      <h3 class="why-title">Why it was held</h3>
+      <ul class="why-list held-reasons"></ul>
+      <p class="note held-meta"></p>
+
+      <div class="contact-needed hidden">
+        <label class="email-label">Not in Grace's contacts. To approve, add their PayPal email:
+          <input class="email-input" type="email" autocomplete="off" placeholder="name@example.com">
+        </label>
+      </div>
+
+      <div class="row">
+        <button class="approve" type="button">Approve and pay</button>
+        <button class="reject" type="button">Reject, keep the money</button>
+      </div>
+      <p class="error held-error" role="alert"></p>
+    </article>
+  </template>
+
+  <script src="/vendor/ag-grid/ag-grid-community.min.js"></script>
+  <script src="/david.js" type="module"></script>
 </body>
 </html>

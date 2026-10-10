@@ -6,10 +6,10 @@ import { createApp } from '../server/app.js';
 import { openDb, seedDemoContacts } from '../server/db.js';
 import { PaymentError } from '../server/payments/service.js';
 
-async function withServer(service, fn) {
+async function withServer(service, fn, { helperPin = '' } = {}) {
   const db = openDb(':memory:');
   seedDemoContacts(db, 'joe@example.com');
-  const server = createApp({ db, service }).listen(0);
+  const server = createApp({ db, service, helperPin }).listen(0);
   const base = `http://localhost:${server.address().port}`;
   try { await fn(base); } finally { server.close(); }
 }
@@ -21,6 +21,9 @@ const fakeService = {
   get(id) { return { id, status: 'PAID' }; },
   async startLink() { return { approveUrl: 'https://paypal.example/approve' }; },
   async finishLink() { return { linked: true }; },
+  helperOverview() { return { held: [{ id: 7 }], history: [] }; },
+  async approve(id, { email }) { return { payment: { id, status: 'PAYING', email } }; },
+  async reject(id) { return { payment: { id, status: 'REJECTED' } }; },
 };
 
 test('status lists the demo contacts and whether PayPal is linked', async () => {
@@ -57,5 +60,27 @@ test('PayPal return link finishes connecting and goes back to Grace\'s screen', 
     const res = await fetch(`${base}/api/link/return?token=LINK1`, { redirect: 'manual' });
     assert.equal(res.status, 302);
     assert.equal(res.headers.get('location'), '/grace.html?link=done');
+  });
+});
+
+test('David\'s routes need the helper PIN', async () => {
+  await withServer(fakeService, async (base) => {
+    assert.equal((await fetch(`${base}/api/helper/overview`)).status, 401);
+    assert.equal((await fetch(`${base}/api/helper/overview`, { headers: { 'x-helper-pin': '0000' } })).status, 401);
+    const ok = await fetch(`${base}/api/helper/overview`, { headers: { 'x-helper-pin': '2468' } });
+    assert.equal(ok.status, 200);
+    assert.equal((await ok.json()).held[0].id, 7);
+    const post = (path, body) => fetch(`${base}${path}`, { method: 'POST', headers: { 'Content-Type': 'application/json', 'x-helper-pin': '2468' }, body: JSON.stringify(body || {}) });
+    assert.equal((await (await post('/api/helper/payments/7/approve', { email: 'bob@example.com' })).json()).payment.email, 'bob@example.com');
+    assert.equal((await (await post('/api/helper/payments/7/reject')).json()).payment.status, 'REJECTED');
+    const noPin = await fetch(`${base}/api/helper/payments/7/reject`, { method: 'POST' });
+    assert.equal(noPin.status, 401);
+  }, { helperPin: '2468' });
+});
+
+test('AG Grid is served from our own server', async () => {
+  await withServer(fakeService, async (base) => {
+    const res = await fetch(`${base}/vendor/ag-grid/ag-grid-community.min.js`);
+    assert.equal(res.status, 200);
   });
 });

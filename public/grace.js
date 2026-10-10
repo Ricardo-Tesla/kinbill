@@ -16,6 +16,7 @@ const els = {
 const Recognition = window.SpeechRecognition || window.webkitSpeechRecognition;
 let status = { userName: 'Grace', helperName: 'David', paypalLinked: false };
 let current = null;        // the payment being confirmed
+let shownId = null;        // the payment shown in the result box
 let busy = false;
 
 // ---------- Speaking and listening ----------
@@ -96,6 +97,7 @@ function showResult(kind, title, text, detail = '', reasons = []) {
 
 function reset() {
   current = null;
+  shownId = null;
   busy = false;
   setListening(false);
   els.typed.value = '';
@@ -156,12 +158,14 @@ async function answer(yes) {
     els.yes.disabled = els.no.disabled = true;
     const r = await api(`/api/requests/${id}/confirm`, {});
     const p = r.payment;
+    shownId = p.id;
     if (p.status === 'PAYING' || p.status === 'PAID') {
       showResult('ok', `Sent ${money(p.amount)} to ${p.payeeName}`, r.spoken, 'It usually arrives within a minute or two.');
       watchUntilPaid(p.id);
     } else if (p.status === 'HELD') {
       showResult('warn', `Paused: ${status.helperName} will check it`, r.spoken,
         'No money has been sent. The payment is waiting safely.', p.graceReasons || []);
+      watchHeld(p.id);
     } else {
       showResult('bad', 'Not sent', r.spoken);
     }
@@ -179,6 +183,33 @@ async function answer(yes) {
     els.yes.disabled = els.no.disabled = false;
     current = null;
     busy = false;
+  }
+}
+
+// While a payment is paused, checks every few seconds for David's decision and tells Grace.
+async function watchHeld(id) {
+  const stillShown = () => shownId === id && !els.result.classList.contains('hidden');
+  for (let i = 0; i < 720 && stillShown(); i++) {   // up to about an hour on screen
+    await new Promise((r) => setTimeout(r, 5000));
+    let p;
+    try { p = await api(`/api/requests/${id}`); } catch { continue; }
+    if (p.status === 'HELD') continue;
+    if (!stillShown()) return;
+    if (p.status === 'PAYING' || p.status === 'PAID') {
+      const msg = `${status.helperName} approved your payment to ${p.payeeName}. ${money(p.amount)} is on its way.`;
+      showResult('ok', `${status.helperName} approved it`, msg, 'It usually arrives within a minute or two.');
+      await say(msg);
+      watchUntilPaid(id);
+    } else if (p.status === 'REJECTED') {
+      const msg = `${status.helperName} decided not to send this payment to ${p.payeeName}. No money was sent.`;
+      showResult('bad', 'Not sent', msg, `If you are unsure, you can call ${status.helperName}.`);
+      await say(msg);
+    } else if (p.status === 'EXPIRED') {
+      const msg = 'No one approved this payment in time, so it was cancelled. No money was sent.';
+      showResult('bad', 'Cancelled', msg);
+      await say(msg);
+    }
+    return;
   }
 }
 

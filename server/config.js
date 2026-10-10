@@ -14,6 +14,8 @@ export const config = {
   publicUrl: (process.env.PUBLIC_URL || `http://localhost:${Number(process.env.PORT) || 3000}`).replace(/\/$/, ''),
   userName: process.env.KINBILL_USER_NAME || 'Grace',
   helperName: process.env.KINBILL_HELPER_NAME || 'David',
+  // PIN David types on his screen before he can see or approve payments. Empty = no PIN (not recommended).
+  helperPin: process.env.HELPER_PIN || '',
 };
 
 // Safety net: refuse to run against live PayPal by accident.

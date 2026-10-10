@@ -5,23 +5,30 @@
 //                             PAY_NOW    -> charge saved PayPal to Kin-bill, pay out to contact -> PAYING -> PAID
 //                             ASK_HELPER -> hold the money in Kin-bill (authorize)             -> HELD
 //   cancel(id)           -> Grace said "no" -> CANCELLED (nothing was charged)
+//   approve(id)          -> David said yes to a HELD payment: take the held money, pay out -> PAYING -> PAID
+//   reject(id)           -> David said no: cancel the hold -> REJECTED (no money moved)
 //
 // Payment statuses:
 //   AWAITING_CONFIRMATION  read back to Grace, waiting for yes/no
 //   CANCELLED              Grace said no
 //   PAYING                 charged, payout to the contact on its way
 //   PAID                   the contact received the money
-//   HELD                   money held, waiting for David (feature 7)
+//   HELD                   money held, waiting for David
+//   REJECTED               David said no: the hold was cancelled, no money moved
 //   FAILED                 nothing was charged (PayPal error)
 //   PAYOUT_FAILED          charged to Kin-bill but the payout failed (needs attention)
 
+import { EventEmitter } from 'node:events';
 import * as paypalOrders from '../paypal/orders.js';
 import { analyzePaymentRequest } from '../ai/riskAgent.js';
 import { decide } from '../rules/engine.js';
 import {
   getSettings, findContactByName, isKnownContact, getContact, recordPaymentToContact,
-  getVaultId, setAccountValue, insertPayment, getPayment, updatePayment,
+  getVaultId, setAccountValue, insertPayment, getPayment, updatePayment, listPayments,
+  addContact, findContactByEmail,
 } from '../db.js';
+
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 export class PaymentError extends Error {
   constructor(message, code, status = 400) {
@@ -43,6 +50,14 @@ export function createPaymentService({
   log = console,
 }) {
   const background = new Set(); // payouts we are still waiting on
+  const events = new EventEmitter(); // 'change' -> David's screen updates live
+
+  // Every status change goes through here, so screens can be told about it.
+  function save(id, changes) {
+    const p = updatePayment(db, id, changes);
+    events.emit('change', { id, status: p?.status });
+    return p;
+  }
 
   function view(p) {
     if (!p) return null;
@@ -52,6 +67,8 @@ export function createPaymentService({
       status: p.status,
       said: p.said,
       payeeName: contact?.name || (p.payee_name.toLowerCase() === 'unknown' ? 'someone not in your contacts' : p.payee_name),
+      // The same person, worded for David: "Unknown person" instead of Grace's "someone not in your contacts".
+      helperPayeeName: contact?.name || (p.payee_name.toLowerCase() === 'unknown' ? 'an unknown person' : p.payee_name),
       inContacts: Boolean(contact),
       amount: p.amount,
       riskScore: p.risk_score,
@@ -63,6 +80,8 @@ export function createPaymentService({
       helperExplanation: p.helper_explanation,
       aiSource: p.ai_source,
       holdExpiresAt: p.hold_expires_at,
+      decidedBy: p.decided_by,
+      decidedAt: p.decided_at,
       error: p.error,
       createdAt: p.created_at,
     };
@@ -124,6 +143,7 @@ export function createPaymentService({
       grace_reasons: graceReasons,
       status: 'AWAITING_CONFIRMATION',
     });
+    events.emit('change', { id: payment.id, status: payment.status });
 
     const name = contact?.name || (unclearName ? 'someone who is not in your contacts' : ai.intent.payee_name);
     return { payment: view(payment), spoken: `You want to pay ${name} ${money(amount)}. Is that right?` };
@@ -154,10 +174,10 @@ export function createPaymentService({
       });
       ({ capture } = await paypal.settleVaultedOrder(order));
       if (capture?.status !== 'COMPLETED') throw new Error(`capture status ${capture?.status}`);
-      updatePayment(db, p.id, { order_id: order.id, capture_id: capture.id });
+      save(p.id, { order_id: order.id, capture_id: capture.id });
     } catch (err) {
       log.error?.(`Payment ${p.id}: charge failed:`, err.message);
-      updatePayment(db, p.id, { status: 'FAILED', error: err.message });
+      save(p.id, { status: 'FAILED', error: err.message });
       return { payment: view(getPayment(db, p.id)), spoken: 'Sorry, something went wrong and no money was sent. Please try again later.' };
     }
 
@@ -167,11 +187,11 @@ export function createPaymentService({
         receiverEmail: contact.email, amount: p.amount, referenceId: `kinbill-payout-${p.id}`,
         note: `From ${userName}, sent with Kin-bill`,
       });
-      updatePayment(db, p.id, { status: 'PAYING', payout_batch_id: payout.batchId });
+      save(p.id, { status: 'PAYING', payout_batch_id: payout.batchId });
       trackPayout(p.id, payout.batchId, contact.id);
     } catch (err) {
       log.error?.(`Payment ${p.id}: payout failed:`, err.message);
-      updatePayment(db, p.id, { status: 'PAYOUT_FAILED', error: err.message });
+      save(p.id, { status: 'PAYOUT_FAILED', error: err.message });
       return { payment: view(getPayment(db, p.id)), spoken: `The money was taken but could not reach ${name} yet. ${helperName} will be asked to help.` };
     }
 
@@ -188,10 +208,10 @@ export function createPaymentService({
       const { authorization } = await paypal.settleVaultedOrder(order);
       if (!authorization?.id) throw new Error('no authorization returned');
       const expires = new Date(Date.now() + holdTimeoutSeconds * 1000).toISOString();
-      updatePayment(db, p.id, { status: 'HELD', order_id: order.id, authorization_id: authorization.id, hold_expires_at: expires });
+      save(p.id, { status: 'HELD', order_id: order.id, authorization_id: authorization.id, hold_expires_at: expires });
     } catch (err) {
       log.error?.(`Payment ${p.id}: hold failed:`, err.message);
-      updatePayment(db, p.id, { status: 'FAILED', error: err.message });
+      save(p.id, { status: 'FAILED', error: err.message });
       return { payment: view(getPayment(db, p.id)), spoken: 'Sorry, something went wrong and no money was sent. Please try again later.' };
     }
     const opening = p.spoken_summary && p.risk_score >= 40
@@ -208,10 +228,10 @@ export function createPaymentService({
     const job = paypal.waitForPayout(batchId, payoutWait)
       .then((status) => {
         if (status === 'SUCCESS') {
-          updatePayment(db, paymentId, { status: 'PAID' });
+          save(paymentId, { status: 'PAID' });
           recordPaymentToContact(db, contactId);
         } else if (['DENIED', 'CANCELED'].includes(status)) {
-          updatePayment(db, paymentId, { status: 'PAYOUT_FAILED', error: `payout ${status}` });
+          save(paymentId, { status: 'PAYOUT_FAILED', error: `payout ${status}` });
         } // still PROCESSING after the wait: stays PAYING
       })
       .catch((err) => log.error?.(`Payment ${paymentId}: payout check failed:`, err.message))
@@ -219,12 +239,81 @@ export function createPaymentService({
     background.add(job);
   }
 
+  // ---- David's decisions on HELD payments ----
+
+  function getHeld(id) {
+    const p = getPayment(db, id);
+    if (!p) throw new PaymentError('Payment not found.', 'NOT_FOUND', 404);
+    if (p.status !== 'HELD') throw new PaymentError('This payment is not waiting for a decision any more.', 'NOT_HELD', 409);
+    return p;
+  }
+
+  // David approves. If the person is not in Grace's contacts, David must give their PayPal email,
+  // and they are added to her contacts first.
+  async function approve(id, { email, by = 'helper' } = {}) {
+    const p = getHeld(id);
+    let contact = p.contact_id ? getContact(db, p.contact_id) : null;
+    if (!contact) {
+      const clean = String(email || '').trim().toLowerCase();
+      if (!EMAIL_RE.test(clean)) {
+        throw new PaymentError(`"${p.payee_name}" is not in ${userName}'s contacts. Add their PayPal email to approve.`, 'EMAIL_REQUIRED');
+      }
+      const name = p.payee_name && p.payee_name.toLowerCase() !== 'unknown' ? p.payee_name : clean;
+      contact = findContactByEmail(db, clean) || addContact(db, { name, email: clean });
+      save(id, { contact_id: contact.id });
+    }
+
+    try {
+      // Take the money that was held in Kin-bill's account.
+      const capture = await paypal.captureAuthorization(p.authorization_id);
+      if (capture?.status !== 'COMPLETED') throw new Error(`capture status ${capture?.status}`);
+      save(id, { capture_id: capture.id, decided_by: by, decided_at: new Date().toISOString() });
+    } catch (err) {
+      log.error?.(`Payment ${id}: approve capture failed:`, err.message);
+      throw new PaymentError(`PayPal could not take the held money: ${err.message}`, 'CAPTURE_FAILED', 502);
+    }
+
+    try {
+      const payout = await paypal.sendPayout({
+        receiverEmail: contact.email, amount: p.amount, referenceId: `kinbill-payout-${p.id}`,
+        note: `From ${userName}, approved by ${helperName}, sent with Kin-bill`,
+      });
+      save(id, { status: 'PAYING', payout_batch_id: payout.batchId });
+      trackPayout(id, payout.batchId, contact.id);
+    } catch (err) {
+      log.error?.(`Payment ${id}: payout failed:`, err.message);
+      save(id, { status: 'PAYOUT_FAILED', error: err.message });
+    }
+    return { payment: view(getPayment(db, id)) };
+  }
+
+  // David rejects: release the hold. No money moves.
+  async function reject(id, { by = 'helper' } = {}) {
+    const p = getHeld(id);
+    try {
+      await paypal.voidAuthorization(p.authorization_id);
+    } catch (err) {
+      log.error?.(`Payment ${id}: void failed:`, err.message);
+      throw new PaymentError(`PayPal could not cancel the hold: ${err.message}`, 'VOID_FAILED', 502);
+    }
+    save(id, { status: 'REJECTED', decided_by: by, decided_at: new Date().toISOString() });
+    return { payment: view(getPayment(db, id)) };
+  }
+
+  // What David's screen shows: payments waiting for him, and the recent history.
+  function helperOverview() {
+    return {
+      held: listPayments(db, { status: 'HELD' }).map(view),
+      history: listPayments(db, { limit: 200 }).filter((p) => p.status !== 'AWAITING_CONFIRMATION').map(view),
+    };
+  }
+
   // Step 2 (alternative): Grace said no.
   function cancel(id) {
     const p = getPayment(db, id);
     if (!p) throw new PaymentError('Payment not found.', 'NOT_FOUND', 404);
     if (p.status !== 'AWAITING_CONFIRMATION') throw new PaymentError('This payment was already handled.', 'ALREADY_HANDLED', 409);
-    updatePayment(db, id, { status: 'CANCELLED' });
+    save(id, { status: 'CANCELLED' });
     return { payment: view(getPayment(db, id)), spoken: 'Okay, I have cancelled it. Nothing was sent.' };
   }
 
@@ -261,5 +350,5 @@ export function createPaymentService({
     while (background.size) await Promise.all([...background]);
   }
 
-  return { createRequest, confirm, cancel, get, startLink, finishLink, idle };
+  return { createRequest, confirm, cancel, get, approve, reject, helperOverview, startLink, finishLink, idle, events };
 }
