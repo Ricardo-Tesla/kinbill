@@ -6,6 +6,7 @@ const els = {
   hello: $('hello'), gate: $('pin-gate'), pinForm: $('pin-form'), pin: $('pin'), pinError: $('pin-error'),
   main: $('main'), heldList: $('held-list'), nothing: $('nothing-waiting'), count: $('waiting-count'),
   liveState: $('live-state'), grid: $('history-grid'), live: $('live'), template: $('held-template'),
+  activityGrid: $('activity-grid'),
 };
 
 const STATUS_LABELS = {
@@ -22,6 +23,16 @@ const STATUS_LABELS = {
 
 let pin = '';
 let gridApi = null;
+let activityApi = null;
+
+const WHO = { grace: 'Grace', david: 'David', ai: 'AI check', kinbill: 'Kin-bill', paypal: 'PayPal', timer: 'Safety timer' };
+const WHAT = {
+  ASKED: 'Asked to pay', CHECKED: 'Checked for scams', RULES_PAY_NOW: 'Rules: pay now', RULES_ASK_HELPER: 'Rules: ask David',
+  CANCELLED: 'Cancelled', CHARGED: 'Charged', HELD: 'Held for David', PAYOUT_SENT: 'Sent on', DELIVERED: 'Delivered',
+  APPROVED: 'Approved', REJECTED: 'Rejected', EXPIRED: 'Auto-cancelled', CONTACT_ADDED: 'Contact added',
+  FAILED: 'Failed', PAYOUT_FAILED: 'Payout failed', CAPTURE_FAILED: 'Capture failed', EXPIRE_RETRY: 'Retrying cancel',
+  CONFIRMED_VOIDED: 'PayPal confirmed cancel', CONFIRMED_CAPTURED: 'PayPal confirmed capture', WEBHOOK: 'PayPal message',
+};
 let knownHeldIds = new Set();
 let pollTimer = null;
 
@@ -224,12 +235,46 @@ function renderHistory(history) {
   els.grid.replaceChildren(table);
 }
 
+// ---------- Activity log (AG Grid) ----------
+
+function renderActivity(entries) {
+  const rows = entries.map((a) => ({
+    when: new Date(a.at).toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit', second: '2-digit' }),
+    payment: a.payment_id ? `#${a.payment_id}` : '',
+    who: WHO[a.actor] || a.actor,
+    what: WHAT[a.action] || a.action,
+    detail: a.detail,
+  }));
+  if (!window.agGrid?.createGrid) {
+    els.activityGrid.style.height = 'auto';
+    els.activityGrid.textContent = rows.map((r) => `${r.when}  ${r.payment}  ${r.who}: ${r.what}. ${r.detail}`).join('\n');
+    return;
+  }
+  if (activityApi) return activityApi.setGridOption('rowData', rows);
+  activityApi = window.agGrid.createGrid(els.activityGrid, {
+    rowData: rows,
+    columnDefs: [
+      { field: 'when', headerName: 'When', width: 170 },
+      { field: 'payment', headerName: 'Payment', width: 110 },
+      { field: 'who', headerName: 'Who', width: 130 },
+      { field: 'what', headerName: 'What', width: 190, cellStyle: { fontWeight: 700 } },
+      { field: 'detail', headerName: 'Details', flex: 1, minWidth: 300, tooltipField: 'detail' },
+    ],
+    defaultColDef: { sortable: true, filter: true, resizable: true },
+    pagination: true,
+    paginationPageSize: 20,
+    paginationPageSizeSelector: [20, 50, 100],
+    overlayNoRowsTemplate: 'Nothing has happened yet.',
+  });
+}
+
 // ---------- Loading and live updates ----------
 
 async function refresh() {
-  const { held, history } = await api('/api/helper/overview');
+  const [{ held, history }, activity] = await Promise.all([api('/api/helper/overview'), api('/api/helper/activity')]);
   renderHeld(held);
   renderHistory(history);
+  renderActivity(activity);
 }
 
 let refreshQueued = false;

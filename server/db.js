@@ -53,6 +53,21 @@ export function openDb(path = process.env.DB_PATH || 'kinbill.db') {
       decided_at TEXT,
       error TEXT
     );
+    -- Everything that happens to a payment, in order: who did what, and when.
+    CREATE TABLE IF NOT EXISTS audit_log (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      at TEXT NOT NULL,
+      payment_id INTEGER,
+      actor TEXT NOT NULL,      -- grace | david | ai | kinbill | paypal | timer
+      action TEXT NOT NULL,     -- short code, e.g. HELD, APPROVED
+      detail TEXT
+    );
+    -- PayPal webhook events already handled (PayPal may send the same event twice).
+    CREATE TABLE IF NOT EXISTS webhook_events (
+      id TEXT PRIMARY KEY,
+      received_at TEXT NOT NULL,
+      event_type TEXT
+    );
   `);
   migrate(db);
   return db;
@@ -203,6 +218,40 @@ export function listPayments(db, { status, limit = 200 } = {}) {
 
 export function findContactByEmail(db, email) {
   return db.prepare('SELECT * FROM contacts WHERE email = ?').get(String(email).toLowerCase()) || null;
+}
+
+// Find a payment by one of PayPal's ids (used by webhooks and restarts).
+export function findPaymentBy(db, field, value) {
+  const allowed = ['authorization_id', 'capture_id', 'payout_batch_id', 'order_id'];
+  if (!allowed.includes(field) || !value) return null;
+  const row = db.prepare(`SELECT id FROM payments WHERE ${field} = ? ORDER BY id DESC LIMIT 1`).get(value);
+  return row ? getPayment(db, row.id) : null;
+}
+
+// Held payments whose time is up.
+export function listExpiredHolds(db, now = new Date()) {
+  return db.prepare("SELECT id FROM payments WHERE status = 'HELD' AND hold_expires_at IS NOT NULL AND hold_expires_at <= ?")
+    .all(now.toISOString()).map((r) => getPayment(db, r.id));
+}
+
+// ---- Activity log ----
+
+export function addAudit(db, { paymentId = null, actor, action, detail = '' }) {
+  db.prepare('INSERT INTO audit_log (at, payment_id, actor, action, detail) VALUES (?, ?, ?, ?, ?)')
+    .run(new Date().toISOString(), paymentId, actor, action, detail);
+}
+
+export function listAudit(db, { paymentId, limit = 300 } = {}) {
+  return paymentId
+    ? db.prepare('SELECT * FROM audit_log WHERE payment_id = ? ORDER BY id ASC').all(paymentId).map((r) => ({ ...r }))
+    : db.prepare('SELECT * FROM audit_log ORDER BY id DESC LIMIT ?').all(limit).map((r) => ({ ...r }));
+}
+
+// Returns true the first time an event id is seen, false for repeats.
+export function markWebhookEvent(db, id, type) {
+  const r = db.prepare('INSERT OR IGNORE INTO webhook_events (id, received_at, event_type) VALUES (?, ?, ?)')
+    .run(id, new Date().toISOString(), type);
+  return r.changes > 0;
 }
 
 function positiveNumber(v, name) {

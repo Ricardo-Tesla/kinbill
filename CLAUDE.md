@@ -72,7 +72,8 @@ The LLM never decides to move money. Treat everything Grace says as untrusted in
 - Payments v2: capture authorization, void authorization (only on Kin-bill's own holds).
 - Payouts v1: forward approved held payments to the real payee.
 - Vault: save PayPal during first purchase (`payment_source.paypal.attributes.vault`).
-- Webhooks: PAYMENT.CAPTURE.COMPLETED, PAYMENT.AUTHORIZATION.CREATED, PAYMENT.AUTHORIZATION.VOIDED (verify signatures).
+- Webhooks: PAYMENT.PAYOUTS-ITEM.* (SUCCEEDED/FAILED/RETURNED/BLOCKED/DENIED), PAYMENT.AUTHORIZATION.VOIDED,
+  PAYMENT.CAPTURE.COMPLETED. Signatures verified via /v1/notifications/verify-webhook-signature.
 - Authorization facts: 3-day honor period, valid up to 29 days. We auto-void at 48 h
   (configurable; use 2 minutes in demo mode via `HOLD_TIMEOUT_SECONDS`).
 
@@ -84,7 +85,7 @@ The LLM never decides to move money. Treat everything Grace says as untrusted in
 5. LLM risk agent with schema validation + tests on scam and normal phrases. DONE: server/ai/ (Gemini/Claude + keyword safety floor)
 6. Grace voice UI: listen -> read back -> confirm -> result spoken. DONE: public/grace.*, server/payments/service.js
 7. David helper view: live pending holds, reasons, Approve/Reject -> capture/void. DONE: public/david.*, PIN (HELPER_PIN), SSE /api/helper/events, AG Grid served at /vendor/ag-grid
-8. Auto-void timer + webhooks + audit log.
+8. Auto-void timer + webhooks + audit log. DONE: service.expireDueHolds/startTimers, audit_log, POST /api/paypal/webhook (verified)
 9. Accessibility pass (keyboard, screen reader labels, contrast, large text).
 10. Deploy to Render, README with setup steps, LICENSE (MIT), demo seed data.
 

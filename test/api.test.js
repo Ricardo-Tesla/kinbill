@@ -9,7 +9,7 @@ import { PaymentError } from '../server/payments/service.js';
 async function withServer(service, fn, { helperPin = '' } = {}) {
   const db = openDb(':memory:');
   seedDemoContacts(db, 'joe@example.com');
-  const server = createApp({ db, service, helperPin }).listen(0);
+  const server = createApp({ db, service, helperPin, webhookId: '' }).listen(0);
   const base = `http://localhost:${server.address().port}`;
   try { await fn(base); } finally { server.close(); }
 }
@@ -22,6 +22,7 @@ const fakeService = {
   async startLink() { return { approveUrl: 'https://paypal.example/approve' }; },
   async finishLink() { return { linked: true }; },
   helperOverview() { return { held: [{ id: 7 }], history: [] }; },
+  activity() { return []; },
   async approve(id, { email }) { return { payment: { id, status: 'PAYING', email } }; },
   async reject(id) { return { payment: { id, status: 'REJECTED' } }; },
 };
@@ -82,5 +83,32 @@ test('AG Grid is served from our own server', async () => {
   await withServer(fakeService, async (base) => {
     const res = await fetch(`${base}/vendor/ag-grid/ag-grid-community.min.js`);
     assert.equal(res.status, 200);
+  });
+});
+
+test('PayPal webhook route: verified events are handled, unverified ones refused', async () => {
+  const handled = [];
+  const service = { ...fakeService, async handleWebhookEvent(e) { handled.push(e.id); return { handled: true, paymentId: 1 }; } };
+  const db = openDb(':memory:');
+  const verify = async ({ headers }) => headers['paypal-transmission-sig'] === 'good';
+  const server = createApp({ db, service, webhookId: 'WH-ID', verifyWebhook: verify }).listen(0);
+  const base = `http://localhost:${server.address().port}`;
+  try {
+    const send = (sig) => fetch(`${base}/api/paypal/webhook`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'paypal-transmission-sig': sig },
+      body: JSON.stringify({ id: 'E1', event_type: 'PAYMENT.PAYOUTS-ITEM.SUCCEEDED' }),
+    });
+    assert.equal((await send('bad')).status, 400);
+    const ok = await send('good');
+    assert.equal(ok.status, 200);
+    assert.deepEqual(handled, ['E1']);
+  } finally { server.close(); }
+});
+
+test('webhook route is off until PAYPAL_WEBHOOK_ID is set', async () => {
+  await withServer(fakeService, async (base) => {
+    const res = await fetch(`${base}/api/paypal/webhook`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' });
+    assert.equal(res.status, 503);
   });
 });

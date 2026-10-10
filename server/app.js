@@ -8,6 +8,7 @@ import { config, isPayPalConfigured } from './config.js';
 import { getAccessToken } from './paypal/client.js';
 import { openDb, getVaultId, listContacts } from './db.js';
 import { createPaymentService, PaymentError } from './payments/service.js';
+import { verifyWebhook as verifyWithPayPal } from './paypal/webhooks.js';
 
 const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
 const PUBLIC_DIR = path.join(ROOT, 'public');
@@ -18,6 +19,8 @@ export function createApp({
   db = openDb(':memory:'),
   service = createPaymentService({ db }),
   helperPin = config.helperPin,
+  webhookId = config.webhookId,
+  verifyWebhook = verifyWithPayPal,
 } = {}) {
   const app = express();
   app.use(express.json({ limit: '20kb' }));
@@ -96,6 +99,7 @@ export function createApp({
 
   app.get('/api/helper/check', requirePin, (req, res) => res.json({ ok: true, helperName: config.helperName, userName: config.userName }));
   app.get('/api/helper/overview', requirePin, handle(() => service.helperOverview()));
+  app.get('/api/helper/activity', requirePin, handle((req) => service.activity({ paymentId: Number(req.query.payment) || undefined })));
   app.post('/api/helper/payments/:id/approve', requirePin,
     handle((req) => service.approve(Number(req.params.id), { email: req.body?.email })));
   app.post('/api/helper/payments/:id/reject', requirePin,
@@ -110,6 +114,21 @@ export function createApp({
     const ping = setInterval(() => res.write(': ping\n\n'), 25000);
     service.events?.on('change', onChange);
     req.on('close', () => { clearInterval(ping); service.events?.off('change', onChange); });
+  });
+
+  // ---- PayPal webhooks: PayPal tells us when a payout lands, a hold is voided, etc. ----
+  // Every event is verified with PayPal before we trust it.
+  app.post('/api/paypal/webhook', async (req, res) => {
+    if (!webhookId) return res.status(503).json({ error: 'PAYPAL_WEBHOOK_ID is not set.' });
+    try {
+      const ok = await verifyWebhook({ headers: req.headers, event: req.body, webhookId });
+      if (!ok) return res.status(400).json({ error: 'Signature check failed.' });
+      const result = await service.handleWebhookEvent(req.body);
+      res.json({ received: true, ...result });
+    } catch (err) {
+      console.error('Webhook error:', err.message);
+      res.status(500).json({ error: 'Could not process the event.' }); // PayPal will retry
+    }
   });
 
   return app;

@@ -20,7 +20,8 @@ Built for the PayPal "Build What's Next with PayPal and AI" hackathon. Sandbox o
 | 5. AI scam checker (Gemini or Claude, keyword safety floor) | Done: `npm run try:ai` |
 | 6. Grace's voice screen: speak, hear it read back, yes/no, real sandbox payment | Done: `npm run dev`, open /grace.html |
 | 7. David's helper screen: held payments, reasons, approve / reject, live updates, AG Grid history | Done: open /david.html |
-| 8–10 | Coming |
+| 8. Safety timer (auto-cancel), activity log, PayPal webhooks (verified) | Done (webhooks switch on after deploy) |
+| 9–10 | Coming |
 
 ## Requirements
 
@@ -81,6 +82,18 @@ Open **http://localhost:3000/david.html** and enter the `HELPER_PIN` from `.env`
 - **Reject**: the hold is voided; no money moves.
 - Updates live (Server-Sent Events). Grace's screen tells her David's decision if her "Paused" box is still open.
 - **All payments**: history table built with **AG Grid** (sponsor), served from `node_modules`, no CDN.
+
+## Feature 8: safety timer, activity log, webhooks
+
+- **Safety timer**: a held payment nobody decides on is voided after `HOLD_TIMEOUT_SECONDS`
+  (48 h by default; set `120` for a 2-minute demo). Checked every `SWEEP_INTERVAL_SECONDS`.
+  Grace hears that it was cancelled and that no money was sent.
+- **Activity log**: every step (Grace asked, AI checked, rules, held, David approved, PayPal delivered,
+  timer cancelled, ...) is recorded in `audit_log` and shown on David's screen (AG Grid).
+- **Restarts are safe**: payouts still on their way are checked again when the server starts.
+- **PayPal webhooks** at `POST /api/paypal/webhook`: every event's signature is verified with PayPal
+  (`/v1/notifications/verify-webhook-signature`) before use; repeats are ignored. Needs a public URL
+  and `PAYPAL_WEBHOOK_ID`, so it is switched on after deploying (feature 10).
 
 ## Project layout
 

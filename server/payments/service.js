@@ -7,6 +7,9 @@
 //   cancel(id)           -> Grace said "no" -> CANCELLED (nothing was charged)
 //   approve(id)          -> David said yes to a HELD payment: take the held money, pay out -> PAYING -> PAID
 //   reject(id)           -> David said no: cancel the hold -> REJECTED (no money moved)
+//   expireDueHolds()     -> safety timer: holds nobody decided in time are cancelled -> EXPIRED
+//   handleWebhookEvent() -> PayPal tells us what happened (payout delivered, hold voided, ...)
+// Every step is written to the activity log (audit_log).
 //
 // Payment statuses:
 //   AWAITING_CONFIRMATION  read back to Grace, waiting for yes/no
@@ -15,6 +18,7 @@
 //   PAID                   the contact received the money
 //   HELD                   money held, waiting for David
 //   REJECTED               David said no: the hold was cancelled, no money moved
+//   EXPIRED                nobody decided in time: the safety timer cancelled the hold, no money moved
 //   FAILED                 nothing was charged (PayPal error)
 //   PAYOUT_FAILED          charged to Kin-bill but the payout failed (needs attention)
 
@@ -25,7 +29,7 @@ import { decide } from '../rules/engine.js';
 import {
   getSettings, findContactByName, isKnownContact, getContact, recordPaymentToContact,
   getVaultId, setAccountValue, insertPayment, getPayment, updatePayment, listPayments,
-  addContact, findContactByEmail,
+  addContact, findContactByEmail, addAudit, listAudit, listExpiredHolds, findPaymentBy, markWebhookEvent,
 } from '../db.js';
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -59,6 +63,11 @@ export function createPaymentService({
     return p;
   }
 
+  // Writes one line to the activity log.
+  function audit(paymentId, actor, action, detail = '') {
+    try { addAudit(db, { paymentId, actor, action, detail }); } catch (err) { log.error?.('audit failed:', err.message); }
+  }
+
   function view(p) {
     if (!p) return null;
     const contact = p.contact_id ? getContact(db, p.contact_id) : null;
@@ -85,6 +94,13 @@ export function createPaymentService({
       error: p.error,
       createdAt: p.created_at,
     };
+  }
+
+  // 172800 -> "48 hours", 120 -> "2 minutes"
+  function duration(seconds) {
+    if (seconds % 3600 === 0) return `${seconds / 3600} hour${seconds === 3600 ? '' : 's'}`;
+    if (seconds % 60 === 0) return `${seconds / 60} minute${seconds === 60 ? '' : 's'}`;
+    return `${seconds} seconds`;
   }
 
   function money(amount) {
@@ -144,6 +160,10 @@ export function createPaymentService({
       status: 'AWAITING_CONFIRMATION',
     });
     events.emit('change', { id: payment.id, status: payment.status });
+    audit(payment.id, userName.toLowerCase(), 'ASKED', `"${said}"`);
+    audit(payment.id, 'ai', 'CHECKED', `${ai.source}: ${ai.intent.payee_name}, $${amount}, risk ${ai.risk_score}/100${ai.flagged_triggers?.length ? ` (${ai.flagged_triggers.join(', ')})` : ''}${ai.aiError ? `; AI unavailable: ${ai.aiError}` : ''}`);
+    audit(payment.id, 'kinbill', decision === 'PAY_NOW' ? 'RULES_PAY_NOW' : 'RULES_ASK_HELPER',
+      decision === 'PAY_NOW' ? `Within ${userName}'s rules: can be paid straight away` : reasons.join(' '));
 
     const name = contact?.name || (unclearName ? 'someone who is not in your contacts' : ai.intent.payee_name);
     return { payment: view(payment), spoken: `You want to pay ${name} ${money(amount)}. Is that right?` };
@@ -175,9 +195,11 @@ export function createPaymentService({
       ({ capture } = await paypal.settleVaultedOrder(order));
       if (capture?.status !== 'COMPLETED') throw new Error(`capture status ${capture?.status}`);
       save(p.id, { order_id: order.id, capture_id: capture.id });
+      audit(p.id, 'paypal', 'CHARGED', `$${p.amount} charged to Kin-bill (order ${order.id}, capture ${capture.id})`);
     } catch (err) {
       log.error?.(`Payment ${p.id}: charge failed:`, err.message);
       save(p.id, { status: 'FAILED', error: err.message });
+      audit(p.id, 'paypal', 'FAILED', `Nothing charged: ${err.message}`);
       return { payment: view(getPayment(db, p.id)), spoken: 'Sorry, something went wrong and no money was sent. Please try again later.' };
     }
 
@@ -188,10 +210,12 @@ export function createPaymentService({
         note: `From ${userName}, sent with Kin-bill`,
       });
       save(p.id, { status: 'PAYING', payout_batch_id: payout.batchId });
+      audit(p.id, 'kinbill', 'PAYOUT_SENT', `$${p.amount} sent on to ${contact.name} (batch ${payout.batchId})`);
       trackPayout(p.id, payout.batchId, contact.id);
     } catch (err) {
       log.error?.(`Payment ${p.id}: payout failed:`, err.message);
       save(p.id, { status: 'PAYOUT_FAILED', error: err.message });
+      audit(p.id, 'paypal', 'PAYOUT_FAILED', err.message);
       return { payment: view(getPayment(db, p.id)), spoken: `The money was taken but could not reach ${name} yet. ${helperName} will be asked to help.` };
     }
 
@@ -209,9 +233,11 @@ export function createPaymentService({
       if (!authorization?.id) throw new Error('no authorization returned');
       const expires = new Date(Date.now() + holdTimeoutSeconds * 1000).toISOString();
       save(p.id, { status: 'HELD', order_id: order.id, authorization_id: authorization.id, hold_expires_at: expires });
+      audit(p.id, 'kinbill', 'HELD', `$${p.amount} held in Kin-bill (authorization ${authorization.id}); waiting for ${helperName}, auto-cancel after ${duration(holdTimeoutSeconds)}`);
     } catch (err) {
       log.error?.(`Payment ${p.id}: hold failed:`, err.message);
       save(p.id, { status: 'FAILED', error: err.message });
+      audit(p.id, 'paypal', 'FAILED', `Nothing held or charged: ${err.message}`);
       return { payment: view(getPayment(db, p.id)), spoken: 'Sorry, something went wrong and no money was sent. Please try again later.' };
     }
     const opening = p.spoken_summary && p.risk_score >= 40
@@ -227,16 +253,25 @@ export function createPaymentService({
   function trackPayout(paymentId, batchId, contactId) {
     const job = paypal.waitForPayout(batchId, payoutWait)
       .then((status) => {
-        if (status === 'SUCCESS') {
-          save(paymentId, { status: 'PAID' });
-          recordPaymentToContact(db, contactId);
-        } else if (['DENIED', 'CANCELED'].includes(status)) {
-          save(paymentId, { status: 'PAYOUT_FAILED', error: `payout ${status}` });
-        } // still PROCESSING after the wait: stays PAYING
+        markPaid(paymentId, contactId, status, 'payout check');
       })
       .catch((err) => log.error?.(`Payment ${paymentId}: payout check failed:`, err.message))
       .finally(() => background.delete(job));
     background.add(job);
+  }
+
+  // Called by the payout check or a PayPal webhook; safe to call twice.
+  function markPaid(paymentId, contactId, payoutStatus, source) {
+    const current = getPayment(db, paymentId);
+    if (!current || current.status !== 'PAYING') return;
+    if (payoutStatus === 'SUCCESS') {
+      save(paymentId, { status: 'PAID' });
+      if (contactId) recordPaymentToContact(db, contactId);
+      audit(paymentId, 'paypal', 'DELIVERED', `Payout delivered (${source})`);
+    } else if (['DENIED', 'CANCELED', 'FAILED', 'RETURNED', 'BLOCKED'].includes(payoutStatus)) {
+      save(paymentId, { status: 'PAYOUT_FAILED', error: `payout ${payoutStatus}` });
+      audit(paymentId, 'paypal', 'PAYOUT_FAILED', `Payout ${payoutStatus} (${source})`);
+    } // still PROCESSING: stays PAYING
   }
 
   // ---- David's decisions on HELD payments ----
@@ -261,6 +296,7 @@ export function createPaymentService({
       const name = p.payee_name && p.payee_name.toLowerCase() !== 'unknown' ? p.payee_name : clean;
       contact = findContactByEmail(db, clean) || addContact(db, { name, email: clean });
       save(id, { contact_id: contact.id });
+      audit(id, 'david', 'CONTACT_ADDED', `${contact.name} <${contact.email}> added to ${userName}'s contacts`);
     }
 
     try {
@@ -268,8 +304,10 @@ export function createPaymentService({
       const capture = await paypal.captureAuthorization(p.authorization_id);
       if (capture?.status !== 'COMPLETED') throw new Error(`capture status ${capture?.status}`);
       save(id, { capture_id: capture.id, decided_by: by, decided_at: new Date().toISOString() });
+      audit(id, 'david', 'APPROVED', `${helperName} approved; held $${p.amount} taken (capture ${capture.id})`);
     } catch (err) {
       log.error?.(`Payment ${id}: approve capture failed:`, err.message);
+      audit(id, 'paypal', 'CAPTURE_FAILED', err.message);
       throw new PaymentError(`PayPal could not take the held money: ${err.message}`, 'CAPTURE_FAILED', 502);
     }
 
@@ -279,10 +317,12 @@ export function createPaymentService({
         note: `From ${userName}, approved by ${helperName}, sent with Kin-bill`,
       });
       save(id, { status: 'PAYING', payout_batch_id: payout.batchId });
+      audit(id, 'kinbill', 'PAYOUT_SENT', `$${p.amount} sent on to ${contact.name} (batch ${payout.batchId})`);
       trackPayout(id, payout.batchId, contact.id);
     } catch (err) {
       log.error?.(`Payment ${id}: payout failed:`, err.message);
       save(id, { status: 'PAYOUT_FAILED', error: err.message });
+      audit(id, 'paypal', 'PAYOUT_FAILED', err.message);
     }
     return { payment: view(getPayment(db, id)) };
   }
@@ -297,7 +337,89 @@ export function createPaymentService({
       throw new PaymentError(`PayPal could not cancel the hold: ${err.message}`, 'VOID_FAILED', 502);
     }
     save(id, { status: 'REJECTED', decided_by: by, decided_at: new Date().toISOString() });
+    audit(id, 'david', 'REJECTED', `${helperName} rejected; hold on $${p.amount} cancelled, no money moved`);
     return { payment: view(getPayment(db, id)) };
+  }
+
+  // ---- Safety timer: holds nobody decided in time are cancelled ----
+
+  async function expireDueHolds(now = new Date()) {
+    let expired = 0;
+    for (const p of listExpiredHolds(db, now)) {
+      try {
+        await paypal.voidAuthorization(p.authorization_id);
+      } catch (err) {
+        // 422 = PayPal says the hold is already gone (voided or expired): treat as cancelled.
+        if (err.status !== 422) {
+          log.error?.(`Payment ${p.id}: auto-cancel failed, will retry:`, err.message);
+          audit(p.id, 'timer', 'EXPIRE_RETRY', `Could not cancel yet: ${err.message}`);
+          continue;
+        }
+      }
+      if (getPayment(db, p.id)?.status !== 'HELD') continue; // David decided meanwhile
+      save(p.id, { status: 'EXPIRED', decided_by: 'timer', decided_at: new Date().toISOString() });
+      audit(p.id, 'timer', 'EXPIRED', `Nobody decided within ${duration(holdTimeoutSeconds)}; hold on $${p.amount} cancelled, no money moved`);
+      expired++;
+    }
+    return expired;
+  }
+
+  // After a restart, keep checking payouts that were still on their way.
+  function resumePayoutChecks() {
+    for (const p of listPayments(db, { status: 'PAYING' })) {
+      if (p.payout_batch_id) trackPayout(p.id, p.payout_batch_id, p.contact_id);
+    }
+  }
+
+  // Runs the safety timer every few seconds. Returns a function that stops it.
+  function startTimers({ intervalMs = 30000 } = {}) {
+    resumePayoutChecks();
+    let running = false;
+    const tick = async () => {
+      if (running) return;
+      running = true;
+      try { await expireDueHolds(); } catch (err) { log.error?.('safety timer:', err.message); } finally { running = false; }
+    };
+    tick();
+    const timer = setInterval(tick, intervalMs);
+    timer.unref?.();
+    return () => clearInterval(timer);
+  }
+
+  // ---- PayPal webhooks (verified in app.js before they get here) ----
+
+  async function handleWebhookEvent(event) {
+    if (!event?.id || !event.event_type) return { handled: false, reason: 'not an event' };
+    if (!markWebhookEvent(db, event.id, event.event_type)) return { handled: false, reason: 'duplicate' };
+    const r = event.resource || {};
+    let p = null;
+    switch (event.event_type) {
+      case 'PAYMENT.PAYOUTS-ITEM.SUCCEEDED':
+      case 'PAYMENT.PAYOUTS-ITEM.FAILED':
+      case 'PAYMENT.PAYOUTS-ITEM.RETURNED':
+      case 'PAYMENT.PAYOUTS-ITEM.BLOCKED':
+      case 'PAYMENT.PAYOUTS-ITEM.DENIED': {
+        p = findPaymentBy(db, 'payout_batch_id', r.payout_batch_id);
+        if (p) markPaid(p.id, p.contact_id, event.event_type.split('.').pop() === 'SUCCEEDED' ? 'SUCCESS' : event.event_type.split('.').pop(), 'PayPal webhook');
+        break;
+      }
+      case 'PAYMENT.AUTHORIZATION.VOIDED':
+        p = findPaymentBy(db, 'authorization_id', r.id);
+        if (p) audit(p.id, 'paypal', 'CONFIRMED_VOIDED', 'PayPal confirmed the hold was cancelled');
+        break;
+      case 'PAYMENT.CAPTURE.COMPLETED':
+        p = findPaymentBy(db, 'capture_id', r.id);
+        if (p) audit(p.id, 'paypal', 'CONFIRMED_CAPTURED', `PayPal confirmed $${r.amount?.value ?? p.amount} captured`);
+        break;
+      default:
+        break;
+    }
+    if (!p) audit(null, 'paypal', 'WEBHOOK', `${event.event_type} (not linked to a Kin-bill payment)`);
+    return { handled: Boolean(p), paymentId: p?.id ?? null };
+  }
+
+  function activity({ paymentId } = {}) {
+    return listAudit(db, { paymentId });
   }
 
   // What David's screen shows: payments waiting for him, and the recent history.
@@ -314,6 +436,7 @@ export function createPaymentService({
     if (!p) throw new PaymentError('Payment not found.', 'NOT_FOUND', 404);
     if (p.status !== 'AWAITING_CONFIRMATION') throw new PaymentError('This payment was already handled.', 'ALREADY_HANDLED', 409);
     save(id, { status: 'CANCELLED' });
+    audit(id, userName.toLowerCase(), 'CANCELLED', `${userName} said no; nothing was charged`);
     return { payment: view(getPayment(db, id)), spoken: 'Okay, I have cancelled it. Nothing was sent.' };
   }
 
@@ -350,5 +473,9 @@ export function createPaymentService({
     while (background.size) await Promise.all([...background]);
   }
 
-  return { createRequest, confirm, cancel, get, approve, reject, helperOverview, startLink, finishLink, idle, events };
+  return {
+    createRequest, confirm, cancel, get, approve, reject, helperOverview, activity,
+    expireDueHolds, startTimers, resumePayoutChecks, handleWebhookEvent,
+    startLink, finishLink, idle, events,
+  };
 }

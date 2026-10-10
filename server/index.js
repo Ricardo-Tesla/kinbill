@@ -19,10 +19,14 @@ const service = createPaymentService({
 
 const app = createApp({ db, service });
 
+// Safety timer: cancels holds nobody decided in time, and resumes payout checks after a restart.
+service.startTimers({ intervalMs: config.sweepIntervalSeconds * 1000 });
+
 app.listen(config.port, () => {
   console.log(`Kin-bill is running:  ${config.publicUrl}`);
   console.log(`Grace's screen:       ${config.publicUrl}/grace.html`);
   if (!isPayPalConfigured()) console.warn('PayPal credentials are missing. Copy .env.example to .env and fill them in.');
   if (!config.payeeJoeEmail) console.warn('PAYEE_JOE_EMAIL is missing in .env, so no demo contacts were added.');
+  console.log(`Safety timer:         holds are cancelled after ${Math.round(config.holdTimeoutSeconds / 60)} min without a decision`);
   if (!getVaultId(db)) console.log(`${config.userName}'s PayPal is not connected yet: open Grace's screen and press "Connect PayPal".`);
 });

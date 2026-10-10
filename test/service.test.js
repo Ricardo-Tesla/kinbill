@@ -227,3 +227,73 @@ test('helper overview lists waiting payments separately from history', async () 
   assert.deepEqual(o.held.map((p) => p.id), [id]);
   assert.ok(o.history.some((p) => p.id === id));
 });
+
+// ---- Feature 8: safety timer, activity log, webhooks ----
+
+test('safety timer: a hold nobody decided is cancelled when time is up, not before', async () => {
+  const { db, service, paypal, id } = await heldPayment({ intent: { payee_name: 'Sam', amount: 40 } });
+  assert.equal(await service.expireDueHolds(new Date()), 0, 'not yet');
+  assert.equal(getPayment(db, id).status, 'HELD');
+  const later = new Date(Date.now() + 49 * 3600 * 1000);
+  assert.equal(await service.expireDueHolds(later), 1);
+  const p = getPayment(db, id);
+  assert.equal(p.status, 'EXPIRED');
+  assert.equal(p.decided_by, 'timer');
+  assert.ok(paypal.calls.some(([n, a]) => n === 'void' && a === 'AUTH1'));
+  assert.equal(paypal.calls.some(([n]) => n === 'payout'), false, 'no money moved');
+});
+
+test('safety timer retries later if PayPal is unreachable, but accepts "already gone"', async () => {
+  const { db, service, paypal, id } = await heldPayment({ intent: { payee_name: 'Sam', amount: 40 } });
+  const later = new Date(Date.now() + 49 * 3600 * 1000);
+  paypal.voidAuthorization = async () => { throw Object.assign(new Error('network down'), { status: 0 }); };
+  assert.equal(await service.expireDueHolds(later), 0);
+  assert.equal(getPayment(db, id).status, 'HELD', 'kept for the next try');
+  paypal.voidAuthorization = async () => { throw Object.assign(new Error('AUTHORIZATION_VOIDED'), { status: 422 }); };
+  assert.equal(await service.expireDueHolds(later), 1);
+  assert.equal(getPayment(db, id).status, 'EXPIRED');
+});
+
+test('activity log records every step in order', async () => {
+  const { service, id } = await heldPayment({ intent: { payee_name: 'Sam', amount: 40 } });
+  await service.approve(id);
+  await service.idle();
+  const steps = service.activity({ paymentId: id }).map((a) => `${a.actor}:${a.action}`);
+  assert.deepEqual(steps, [
+    'grace:ASKED', 'ai:CHECKED', 'kinbill:RULES_ASK_HELPER', 'kinbill:HELD',
+    'david:APPROVED', 'kinbill:PAYOUT_SENT', 'paypal:DELIVERED',
+  ]);
+});
+
+test('webhook: payout delivered marks the payment PAID, and repeats are ignored', async () => {
+  const { db, service, paypal } = setup();
+  paypal.waitForPayout = () => new Promise(() => {}); // the background check never answers
+  const r = await service.createRequest('Pay Joe 80 dollars');
+  await service.confirm(r.payment.id);
+  assert.equal(getPayment(db, r.payment.id).status, 'PAYING');
+  const event = { id: 'WH-1', event_type: 'PAYMENT.PAYOUTS-ITEM.SUCCEEDED', resource: { payout_batch_id: 'BATCH1' } };
+  assert.deepEqual(await service.handleWebhookEvent(event), { handled: true, paymentId: r.payment.id });
+  assert.equal(getPayment(db, r.payment.id).status, 'PAID');
+  assert.equal((await service.handleWebhookEvent(event)).reason, 'duplicate');
+});
+
+test('webhook: a confirmed void is logged against the right payment', async () => {
+  const { service, id } = await heldPayment({ intent: { payee_name: 'PayPal', amount: 600 }, risk_score: 95 });
+  await service.reject(id);
+  await service.handleWebhookEvent({ id: 'WH-2', event_type: 'PAYMENT.AUTHORIZATION.VOIDED', resource: { id: 'AUTH1' } });
+  assert.ok(service.activity({ paymentId: id }).some((a) => a.action === 'CONFIRMED_VOIDED'));
+});
+
+test('after a restart, payouts still on their way are checked again', async () => {
+  const { db, service, paypal } = setup();
+  let hang = true;
+  paypal.waitForPayout = () => (hang ? new Promise(() => {}) : Promise.resolve('SUCCESS'));
+  const r = await service.createRequest('Pay Joe 80 dollars');
+  await service.confirm(r.payment.id);
+  // "restart": a new service on the same database
+  hang = false;
+  const fresh = createPaymentService({ db, paypal, analyze: fakeAnalyze(), log: { error() {} } });
+  fresh.resumePayoutChecks();
+  await fresh.idle();
+  assert.equal(getPayment(db, r.payment.id).status, 'PAID');
+});

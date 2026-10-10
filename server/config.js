@@ -16,6 +16,10 @@ export const config = {
   helperName: process.env.KINBILL_HELPER_NAME || 'David',
   // PIN David types on his screen before he can see or approve payments. Empty = no PIN (not recommended).
   helperPin: process.env.HELPER_PIN || '',
+  // From developer.paypal.com > your app > Webhooks (only needed once Kin-bill is online, feature 10).
+  webhookId: process.env.PAYPAL_WEBHOOK_ID || '',
+  // How often the safety timer checks for holds whose time is up.
+  sweepIntervalSeconds: Number(process.env.SWEEP_INTERVAL_SECONDS) || 30,
 };
 
 // Safety net: refuse to run against live PayPal by accident.
