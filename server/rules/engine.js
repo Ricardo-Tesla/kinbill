@@ -16,6 +16,15 @@ export const DEFAULT_SETTINGS = {
 // Red flags so serious that the payment always waits for David, whatever the amount.
 export const ALWAYS_ASK_TRIGGERS = ['GIFT_CARD', 'IMPERSONATION', 'CRYPTO', 'SECRECY', 'COACHED'];
 
+// Gentle words for Grace herself: explain, never frighten or blame.
+const TRIGGER_WORDS_FOR_GRACE = {
+  GIFT_CARD: 'Real companies and family members rarely ask for gift cards.',
+  IMPERSONATION: 'Someone may be pretending to be a company, an official or a relative.',
+  SECRECY: 'You were asked to keep it a secret.',
+  CRYPTO: 'Requests for cryptocurrency are often tricks.',
+  COACHED: 'Someone told you what to say to Kin-bill.',
+};
+
 const TRIGGER_WORDS = {
   URGENCY: 'pressure to pay quickly',
   NEW_PAYEE: 'someone Grace has not paid before',
@@ -34,38 +43,48 @@ const TRIGGER_WORDS = {
  * @param {string[]} p.triggers    red flags from the AI risk agent
  * @param {boolean} p.knownPayee   has Grace paid this person before?
  * @param {object} p.settings      Grace's settings (missing values use DEFAULT_SETTINGS)
- * @returns {{ decision: 'PAY_NOW' | 'ASK_HELPER', reasons: string[] }}
+ * @param {string} p.payeeName     who is being paid (used in Grace's wording)
+ * @returns {{ decision: 'PAY_NOW' | 'ASK_HELPER', reasons: string[], graceReasons: string[] }}
+ *   reasons:      for David (direct, detailed)
+ *   graceReasons: for Grace (gentle, "you" wording), same order
  */
-export function decide({ amount, riskScore, triggers = [], knownPayee = false, settings = {} }) {
+export function decide({ amount, riskScore, triggers = [], knownPayee = false, settings = {}, payeeName = '' }) {
   const s = { ...DEFAULT_SETTINGS, ...settings };
   const reasons = [];
+  const graceReasons = [];
+  const add = (forDavid, forGrace) => { reasons.push(forDavid); graceReasons.push(forGrace); };
+  const them = payeeName && payeeName.toLowerCase() !== 'unknown' ? payeeName : 'this person';
 
   const value = Number(amount);
   if (!Number.isFinite(value) || value <= 0) {
-    return { decision: 'ASK_HELPER', reasons: ['The amount was not clear.'] };
+    return { decision: 'ASK_HELPER', reasons: ['The amount was not clear.'], graceReasons: ['I was not sure about the amount.'] };
   }
 
   const score = Number(riskScore);
   if (!Number.isFinite(score) || score < 0 || score > 100) {
-    reasons.push('The safety check did not give a clear answer.');
+    add('The safety check did not give a clear answer.', 'I could not finish my safety check, so a second look is safer.');
   } else if (score >= s.riskThreshold) {
-    reasons.push(`The safety check rated this ${score} out of 100 for scam risk. Grace asks David about anything rated ${s.riskThreshold} or higher.`);
+    add(`The safety check rated this ${score} out of 100 for scam risk. Grace asks David about anything rated ${s.riskThreshold} or higher.`,
+      'Something about this request sounds like a common trick, so a second look is safer.');
   }
 
   if (value > s.perPaymentLimit) {
-    reasons.push(`$${value.toFixed(2)} is above Grace's limit of $${Number(s.perPaymentLimit).toFixed(2)}.`);
+    add(`$${value.toFixed(2)} is above Grace's limit of $${Number(s.perPaymentLimit).toFixed(2)}.`,
+      `It is more than your limit of $${Number(s.perPaymentLimit).toFixed(2)}.`);
   }
 
   if (s.askForNewPayees && !knownPayee) {
-    reasons.push('Grace has not paid this person before.');
+    add('Grace has not paid this person before.', `You have not paid ${them} before.`);
   }
 
   const flags = [...new Set((Array.isArray(triggers) ? triggers : []).map((t) => String(t).toUpperCase()))];
   for (const flag of flags.filter((f) => ALWAYS_ASK_TRIGGERS.includes(f))) {
-    reasons.push(`Warning sign: ${TRIGGER_WORDS[flag]}.`);
+    add(`Warning sign: ${TRIGGER_WORDS[flag]}.`, TRIGGER_WORDS_FOR_GRACE[flag]);
   }
 
-  return reasons.length ? { decision: 'ASK_HELPER', reasons } : { decision: 'PAY_NOW', reasons: [] };
+  return reasons.length
+    ? { decision: 'ASK_HELPER', reasons, graceReasons }
+    : { decision: 'PAY_NOW', reasons: [], graceReasons: [] };
 }
 
 // Turns trigger codes into plain words for David's screen.

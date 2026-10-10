@@ -1,0 +1,81 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Kin-bill: pay someone</title>
+  <link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+  <div class="wrap">
+    <header>
+      <p class="brand">Kin-bill</p>
+      <p class="hello" id="hello">Hello</p>
+    </header>
+
+    <!-- Shown only until Grace's PayPal is connected -->
+    <section id="link-banner" class="banner hidden" aria-labelledby="link-title">
+      <h2 id="link-title">Connect your PayPal first</h2>
+      <p>You only do this once. PayPal will check your account with a 1 dollar hold and release it straight away.</p>
+      <button id="link-button" class="primary" type="button">Connect PayPal</button>
+    </section>
+
+    <main>
+      <!-- Step 1: speak or type -->
+      <section id="ask">
+        <h1 class="prompt" id="prompt">Who would you like to pay?</h1>
+        <button id="speak" class="speak" type="button" aria-describedby="speak-hint">
+          <svg viewBox="0 0 24 24" aria-hidden="true" fill="currentColor"><path d="M12 15a3 3 0 0 0 3-3V6a3 3 0 1 0-6 0v6a3 3 0 0 0 3 3Zm5-3a5 5 0 0 1-10 0H5a7 7 0 0 0 6 6.92V21h2v-2.08A7 7 0 0 0 19 12h-2Z"/></svg>
+          <span id="speak-label">Tap and speak</span>
+        </button>
+        <p id="speak-hint" class="note">For example: "Pay my plumber Joe 80 dollars".</p>
+
+        <details id="type-instead">
+          <summary>Type instead</summary>
+          <form id="typed-form" class="typed-form">
+            <label class="sr-only" for="typed">Who to pay and how much</label>
+            <input id="typed" name="typed" autocomplete="off" placeholder="Pay Joe 80 dollars">
+            <button class="primary" type="submit">Send</button>
+          </form>
+        </details>
+      </section>
+
+      <!-- Step 2: read back and confirm -->
+      <section id="confirm" class="card hidden" aria-labelledby="confirm-title">
+        <h2 id="confirm-title">Is this right?</h2>
+        <p class="big-amount" id="confirm-text"></p>
+        <p class="said" id="confirm-said"></p>
+        <div class="row">
+          <button id="yes" class="yes" type="button">Yes, send it</button>
+          <button id="no" class="no" type="button">No, cancel</button>
+        </div>
+      </section>
+
+      <!-- Step 3: result -->
+      <section id="result" class="card hidden" aria-labelledby="result-title">
+        <h2 id="result-title"></h2>
+        <p id="result-text"></p>
+        <div id="result-why" class="hidden">
+          <h3 class="why-title">Why I paused it</h3>
+          <ul id="result-reasons" class="why-list"></ul>
+        </div>
+        <p class="note" id="result-detail"></p>
+        <button id="again" class="primary" type="button">Make another payment</button>
+      </section>
+
+      <!-- Demo helpers for judges and browsers without a microphone -->
+      <section class="examples" aria-labelledby="examples-title">
+        <h2 id="examples-title">Try an example (demo)</h2>
+        <button type="button" data-example="Pay my plumber Joe 80 dollars for fixing the sink">Pay Joe $80</button>
+        <button type="button" data-example="Pay Sam the gardener 40 dollars">Pay Sam $40 (new person)</button>
+        <button type="button" data-example="A man from PayPal called, my account is locked and I must send 600 dollars today to unlock it">"PayPal" scam call</button>
+        <button type="button" data-example="My grandson needs 50 dollars in gift cards, he said don't tell his dad">Grandson gift cards</button>
+      </section>
+    </main>
+
+    <!-- Everything Kin-bill says is also announced to screen readers -->
+    <div id="live" class="sr-only" aria-live="assertive" aria-atomic="true"></div>
+  </div>
+  <script src="/grace.js" type="module"></script>
+</body>
+</html>

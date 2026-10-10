@@ -1,0 +1,106 @@
+/* Kin-bill: designed for low vision. Big text, strong contrast, big targets, clear focus. */
+
+:root {
+  --bg: #fffdf7;
+  --text: #111111;
+  --muted: #3d3d3d;
+  --primary: #0b3d91;
+  --primary-text: #ffffff;
+  --ok-bg: #e3f4e8;
+  --ok: #0a5c25;
+  --warn-bg: #fff1d6;
+  --warn: #7a4100;
+  --bad-bg: #fde4e4;
+  --bad: #8f1111;
+  --border: #111111;
+  --focus: #ffb000;
+  --radius: 18px;
+}
+
+* { box-sizing: border-box; }
+
+html { font-size: 24px; }
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-family: "Atkinson Hyperlegible", "Segoe UI", Verdana, Arial, sans-serif;
+  line-height: 1.45;
+}
+
+.wrap { max-width: 860px; margin: 0 auto; padding: 24px 20px 64px; }
+
+header { display: flex; justify-content: space-between; align-items: baseline; gap: 16px; flex-wrap: wrap; }
+.brand { font-size: 1.6rem; font-weight: 800; color: var(--primary); margin: 0; }
+.hello { font-size: 1.1rem; color: var(--muted); margin: 0; }
+
+h1, h2 { line-height: 1.2; }
+.prompt { font-size: 2rem; font-weight: 800; margin: 32px 0 20px; }
+
+button, .button {
+  display: inline-flex; align-items: center; justify-content: center; gap: 14px;
+  min-height: 88px; padding: 16px 28px;
+  font: inherit; font-size: 1.35rem; font-weight: 700;
+  border: 3px solid var(--border); border-radius: var(--radius);
+  background: #ffffff; color: var(--text);
+  cursor: pointer; text-decoration: none;
+}
+button:hover, .button:hover { filter: brightness(0.95); }
+button:disabled { opacity: 0.55; cursor: not-allowed; }
+:focus-visible { outline: 6px solid var(--focus); outline-offset: 4px; }
+
+.primary { background: var(--primary); color: var(--primary-text); border-color: var(--primary); }
+
+.speak {
+  width: 100%; min-height: 180px; font-size: 2rem;
+  background: var(--primary); color: var(--primary-text); border-color: var(--primary);
+}
+.speak svg { width: 64px; height: 64px; flex: none; }
+.speak.listening { background: #8f1111; border-color: #8f1111; }
+
+.row { display: flex; gap: 20px; flex-wrap: wrap; }
+.row > * { flex: 1 1 240px; }
+
+.yes { background: var(--ok); color: #fff; border-color: var(--ok); font-size: 1.8rem; min-height: 120px; }
+.no { background: #ffffff; font-size: 1.8rem; min-height: 120px; }
+
+.card {
+  border: 3px solid var(--border); border-radius: var(--radius);
+  padding: 24px; margin: 28px 0; background: #ffffff;
+}
+.card.ok { background: var(--ok-bg); border-color: var(--ok); }
+.card.warn { background: var(--warn-bg); border-color: var(--warn); }
+.card.bad { background: var(--bad-bg); border-color: var(--bad); }
+.card h2 { margin: 0 0 12px; font-size: 1.9rem; }
+.card p { margin: 0 0 12px; font-size: 1.25rem; }
+.card .big-amount { font-size: 2.4rem; font-weight: 800; line-height: 1.2; }
+
+.said { font-size: 1.1rem; color: var(--muted); font-style: italic; }
+
+details { margin-top: 24px; font-size: 1.1rem; }
+summary { cursor: pointer; font-weight: 700; padding: 12px 0; }
+.typed-form { display: flex; gap: 12px; flex-wrap: wrap; margin-top: 8px; }
+.typed-form input {
+  flex: 1 1 320px; min-height: 72px; font: inherit; font-size: 1.2rem;
+  padding: 12px 16px; border: 3px solid var(--border); border-radius: 12px;
+}
+.typed-form button { min-height: 72px; }
+
+.banner { border: 3px solid var(--warn); background: var(--warn-bg); border-radius: var(--radius); padding: 20px 24px; margin: 24px 0; }
+.banner p { margin: 0 0 14px; font-size: 1.2rem; }
+
+.examples { margin-top: 40px; border-top: 2px solid #d0d0d0; padding-top: 16px; }
+.examples h2 { font-size: 1rem; color: var(--muted); margin: 0 0 8px; }
+.examples button { min-height: 56px; font-size: 0.85rem; font-weight: 600; margin: 6px 6px 0 0; padding: 10px 16px; border-width: 2px; }
+
+.hidden { display: none !important; }
+.sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+
+.choose { display: grid; gap: 24px; margin-top: 32px; }
+.choose a { min-height: 140px; font-size: 1.6rem; }
+.note { color: var(--muted); font-size: 0.9rem; }
+
+.why-title { font-size: 1.3rem; margin: 16px 0 8px; }
+.why-list { margin: 0 0 16px; padding-left: 1.2em; font-size: 1.25rem; }
+.why-list li { margin-bottom: 8px; }

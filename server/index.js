@@ -2,13 +2,27 @@
 
 import { createApp } from './app.js';
 import { config, isPayPalConfigured } from './config.js';
+import { openDb, seedDemoContacts, importLegacyVault, getVaultId } from './db.js';
+import { createPaymentService } from './payments/service.js';
 
-const app = createApp();
+const db = openDb();
+seedDemoContacts(db, config.payeeJoeEmail);
+if (importLegacyVault(db)) console.log('Reused the saved PayPal link from .kinbill-vault.json');
+
+const service = createPaymentService({
+  db,
+  holdTimeoutSeconds: config.holdTimeoutSeconds,
+  publicUrl: config.publicUrl,
+  userName: config.userName,
+  helperName: config.helperName,
+});
+
+const app = createApp({ db, service });
 
 app.listen(config.port, () => {
-  console.log(`Kin-bill server running at http://localhost:${config.port}`);
-  console.log(`Health check:  http://localhost:${config.port}/api/health`);
-  if (!isPayPalConfigured()) {
-    console.warn('PayPal credentials are missing. Copy .env.example to .env and fill them in.');
-  }
+  console.log(`Kin-bill is running:  ${config.publicUrl}`);
+  console.log(`Grace's screen:       ${config.publicUrl}/grace.html`);
+  if (!isPayPalConfigured()) console.warn('PayPal credentials are missing. Copy .env.example to .env and fill them in.');
+  if (!config.payeeJoeEmail) console.warn('PAYEE_JOE_EMAIL is missing in .env, so no demo contacts were added.');
+  if (!getVaultId(db)) console.log(`${config.userName}'s PayPal is not connected yet: open Grace's screen and press "Connect PayPal".`);
 });

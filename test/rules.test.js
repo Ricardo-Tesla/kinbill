@@ -3,12 +3,12 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { decide, describeTriggers, DEFAULT_SETTINGS } from '../server/rules/engine.js';
-import { openDb, getSettings, saveSettings, isKnownPayee, recordPayment, listPayees } from '../server/db.js';
+import { openDb, getSettings, saveSettings, addContact, findContactByName, isKnownContact, recordPaymentToContact, getContact, seedDemoContacts, listContacts } from '../server/db.js';
 
 const safe = { riskScore: 5, triggers: [], knownPayee: true };
 
 test('small, low-risk payment to someone Grace knows is paid now', () => {
-  assert.deepEqual(decide({ ...safe, amount: 80 }), { decision: 'PAY_NOW', reasons: [] });
+  assert.deepEqual(decide({ ...safe, amount: 80 }), { decision: 'PAY_NOW', reasons: [], graceReasons: [] });
 });
 
 test('amount above Grace\'s limit asks David', () => {
@@ -58,6 +58,15 @@ test('fails safe: unclear amount or missing risk score asks David', () => {
   assert.equal(decide({ ...safe, amount: 20, riskScore: 400 }).decision, 'ASK_HELPER');
 });
 
+test('Grace gets gentle reasons in "you" wording, one for each of David\'s reasons', () => {
+  const r = decide({ amount: 600, riskScore: 92, triggers: ['GIFT_CARD', 'SECRECY'], knownPayee: false, payeeName: 'Bob' });
+  assert.equal(r.graceReasons.length, r.reasons.length);
+  assert.ok(r.graceReasons.includes('You have not paid Bob before.'));
+  assert.ok(r.graceReasons.includes('It is more than your limit of $100.00.'));
+  assert.ok(r.graceReasons.includes('Real companies and family members rarely ask for gift cards.'));
+  assert.ok(r.graceReasons.every((t) => !/scam/i.test(t)), 'never says "scam" to Grace');
+});
+
 test('describeTriggers gives plain words for David', () => {
   assert.deepEqual(describeTriggers(['GIFT_CARD', 'URGENCY']), ['a request for gift cards', 'pressure to pay quickly']);
 });
@@ -72,11 +81,25 @@ test('settings start with defaults and can be changed', () => {
   assert.throws(() => saveSettings(db, { riskThreshold: 150 }), /between/);
 });
 
-test('payees become known after a payment', () => {
+test('contacts: matching spoken names and becoming known after a payment', () => {
   const db = openDb(':memory:');
-  assert.equal(isKnownPayee(db, 'joe@example.com'), false);
-  recordPayment(db, { email: 'Joe@Example.com', name: 'Joe the plumber' });
-  recordPayment(db, { email: 'joe@example.com', name: 'Joe the plumber' });
-  assert.equal(isKnownPayee(db, 'joe@example.com'), true);
-  assert.equal(listPayees(db)[0].times_paid, 2);
+  const joe = addContact(db, { name: 'Joe the plumber', email: 'Joe@Example.com' });
+  addContact(db, { name: 'Sam the gardener', email: 'sam@example.com' });
+  assert.equal(findContactByName(db, 'Joe').id, joe.id);
+  assert.equal(findContactByName(db, 'joe the plumber').id, joe.id);
+  assert.equal(findContactByName(db, 'the plumber').id, joe.id);
+  assert.equal(findContactByName(db, 'Sam').name, 'Sam the gardener');
+  assert.equal(findContactByName(db, 'PayPal'), null);
+  assert.equal(findContactByName(db, 'Grandson'), null);
+  assert.equal(isKnownContact(joe), false);
+  recordPaymentToContact(db, joe.id);
+  assert.equal(isKnownContact(getContact(db, joe.id)), true);
+  assert.equal(getContact(db, joe.id).email, 'joe@example.com');
+});
+
+test('demo contacts are added once', () => {
+  const db = openDb(':memory:');
+  seedDemoContacts(db, 'joe@example.com');
+  seedDemoContacts(db, 'joe@example.com');
+  assert.deepEqual(listContacts(db).map((c) => [c.name, c.times_paid]), [['Joe the plumber', 1], ['Sam the gardener', 0]]);
 });

@@ -17,7 +17,9 @@ Built for the PayPal "Build What's Next with PayPal and AI" hackathon. Sandbox o
 | 2. Sandbox spike: capture, hold then void, hold then capture then payout | Done (passed in sandbox) |
 | 3. Link PayPal once (vault), pay with no browser | Done (passed in sandbox) |
 | 4. Grace's rules + database (settings, people paid before) | Done: `npm run try:rules` |
-| 5–10 | Coming |
+| 5. AI scam checker (Gemini or Claude, keyword safety floor) | Done: `npm run try:ai` |
+| 6. Grace's voice screen: speak, hear it read back, yes/no, real sandbox payment | Done: `npm run dev`, open /grace.html |
+| 7–10 | Coming |
 
 ## Requirements
 
@@ -52,6 +54,22 @@ npm run spike:vault          # V1 needs Grace's approval in the browser once
 npm run spike:vault -- V2    # rerun V2 and V3 with the saved link, no browser
 ```
 
+## Feature 6: Grace's screen
+
+```bash
+npm run dev
+```
+
+Open **http://localhost:3000/grace.html** in Chrome or Edge (best for voice).
+
+- Press **Tap and speak** and say *"Pay my plumber Joe 80 dollars"*, or use **Type instead** / the example buttons.
+- Kin-bill reads it back; answer **yes** or **no** (voice or the big buttons).
+- Safe payments to known contacts are charged to Kin-bill and paid out to the contact.
+  Risky payments, new people and anyone not in Grace's contacts are **held** for David.
+- Demo contacts: *Joe the plumber* (paid before) and *Sam the gardener* (new). Both use `PAYEE_JOE_EMAIL`.
+- If PayPal isn't connected yet, press **Connect PayPal** (one time, $1 check released straight away).
+  A link saved by `npm run spike:vault` is reused automatically.
+
 ## Project layout
 
 ```
@@ -62,7 +80,10 @@ server/
   paypal/client.js  OAuth token + request helper
   paypal/orders.js  create / capture / authorize / void / payouts
   rules/engine.js   Grace's rules: pay now or ask David
-  db.js             SQLite (built into Node): settings, people paid before
+  db.js             SQLite (built into Node): settings, contacts, PayPal link, payments
+  ai/               AI scam checker + keyword safety floor
+  payments/service.js  the payment flow: read back, pay now or hold for David
+public/             Grace's screen (grace.html/js), styles, landing page
 scripts/            check-paypal.js, spike-paypal.js
 test/               node:test unit tests with a fake fetch
 ```

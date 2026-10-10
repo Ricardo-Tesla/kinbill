@@ -55,8 +55,10 @@ The LLM never decides to move money. Treat everything Grace says as untrusted in
 
 ## Tech stack (keep it simple)
 - Backend: Node.js 22.9+ (24 LTS recommended) + Express, plain `fetch` to PayPal REST (sandbox: https://api-m.sandbox.paypal.com).
-- Frontend: React + Vite. Two views: Grace (voice-first, huge text, high contrast,
-  screen-reader friendly) and David (helper dashboard: pending holds, AI reasons, Approve/Reject).
+- Frontend: plain HTML/CSS/JS in public/ (no build step, simpler for judges). Two views:
+  Grace (voice-first, huge text, high contrast, screen-reader friendly) and David (helper
+  dashboard: pending holds, AI reasons, Approve/Reject).
+- Kin-bill only pays people in Grace's contacts (contacts table). Unknown payees are always held.
 - Voice: browser Web Speech API (SpeechRecognition + speechSynthesis) — no extra keys; test in Chrome.
 - LLM: Claude API (or another model) with structured JSON output.
 - Storage: Node's built-in SQLite (`node:sqlite`, no native install on Windows) for settings,
@@ -80,7 +82,7 @@ The LLM never decides to move money. Treat everything Grace says as untrusted in
 3. Vault flow: one-time "Link PayPal" setup, store vault id; pay with it without buyer present. DONE (spike)
 4. Rules engine + Grace's settings (limit, known payees) with unit tests. DONE: server/rules/engine.js, server/db.js
 5. LLM risk agent with schema validation + tests on scam and normal phrases. DONE: server/ai/ (Gemini/Claude + keyword safety floor)
-6. Grace voice UI: listen -> read back -> confirm -> result spoken.
+6. Grace voice UI: listen -> read back -> confirm -> result spoken. DONE: public/grace.*, server/payments/service.js
 7. David helper view: live pending holds, reasons, Approve/Reject -> capture/void.
 8. Auto-void timer + webhooks + audit log.
 9. Accessibility pass (keyboard, screen reader labels, contrast, large text).
