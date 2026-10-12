@@ -6,13 +6,21 @@
   <title>Kin-bill: helper</title>
   <link rel="stylesheet" href="/styles.css">
   <link rel="stylesheet" href="/david.css">
+  <meta name="color-scheme" content="light dark">
+  <meta name="theme-color" content="#F5F7FA" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#071233" media="(prefers-color-scheme: dark)">
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+  <script src="/theme.js"></script>
 </head>
 <body class="helper">
   <a class="skip-link" href="#main">Skip to main content</a>
   <div class="wrap wide">
-    <header>
-      <p class="brand">Kin-bill <span class="tag">Helper</span></p>
-      <p class="hello" id="hello">Hello</p>
+    <header class="topbar">
+      <a class="brand" href="/"><svg class="mark" viewBox="0 0 32 32" aria-hidden="true"><rect class="tile" width="32" height="32" rx="9"/><circle class="glyph" cx="16" cy="16" r="9"/><path class="glyph" d="M12 16.4l2.8 2.8 5.4-6"/></svg><span>Kin<span class="dash">-</span>bill</span> <span class="tag">Helper</span></a>
+      <div class="top-right">
+        <p class="hello" id="hello">Hello</p>
+        <div data-theme-switch></div>
+      </div>
     </header>
 
     <main id="main" tabindex="-1">
@@ -36,6 +44,29 @@
         <p id="nothing-waiting" class="empty hidden">Nothing is waiting. Grace's payments are going through normally.</p>
       </section>
 
+      <section aria-labelledby="rules-title" class="rules card">
+        <p class="eyebrow">Family check · rules</p>
+        <h2 id="rules-title" class="h-small">Grace's safety rules</h2>
+        <p id="rules-alert" class="alert-box hidden"></p>
+        <p class="note">Grace can make these stricter herself. Only you can make them less strict.</p>
+        <form id="rules-form" class="rules-form">
+          <label class="field-label" for="rule-limit">Pay without asking you, up to (dollars)</label>
+          <input id="rule-limit" name="perPaymentLimit" type="number" inputmode="decimal" min="1" max="10000" step="0.01" required>
+
+          <label class="field-label" for="rule-care">Scam check: ask you when the AI risk score is at least</label>
+          <select id="rule-care" name="riskThreshold" class="select">
+            <option value="25">25: Very careful</option>
+            <option value="40">40: Careful (recommended)</option>
+            <option value="60">60: Relaxed</option>
+          </select>
+
+          <label class="check"><input type="checkbox" name="askForNewPayees"> <span>Ask me the first time Grace pays someone new</span></label>
+
+          <button class="primary" type="submit">Save Grace's rules</button>
+          <p id="rules-message" class="rules-message" role="status"></p>
+        </form>
+      </section>
+
       <section aria-labelledby="history-title">
         <h2 id="history-title" class="h-small">All payments</h2>
         <div id="history-grid" class="grid"></div>
@@ -54,12 +85,13 @@
 
   <template id="held-template">
     <article class="card held">
+      <p class="doc-head"><span class="eyebrow">Family check</span><span class="status held-status">Waiting for you</span></p>
       <div class="held-top">
         <div>
           <h2 class="held-amount"></h2>
           <p class="held-payee"></p>
         </div>
-        <p class="risk"><span class="risk-score"></span><span class="sr-only"> out of 100</span> <span class="risk-label">scam risk</span></p>
+        <p class="risk"><span class="risk-label">Scam risk</span><span class="risk-score"></span><span class="risk-of" aria-hidden="true">/100</span><span class="sr-only"> out of 100</span></p>
       </div>
       <p class="held-said"></p>
       <p class="held-ai"></p>

@@ -1,24 +1,104 @@
-/* Kin-bill: designed for low vision. Big text, strong contrast, big targets, clear focus. */
+/* Kin-bill "Family Check" design.
+   PayPal-aligned navy and white, serious and calm. Signature pieces:
+   - a round talk button (the "magnet"), with a pulse only while it listens
+   - the confirm step laid out like a cheque: Pay to / Amount / Memo
+   - every result carries a status pill (Sent / Waiting for David / Not sent), never colour alone
+   - David's decision is signed: "Checked by David"
+   Light, dark and automatic themes (see theme.js). Built for low vision: 24 px base, big targets. */
 
-:root {
-  --bg: #fffdf7;
-  --text: #111111;
-  --muted: #3d3d3d;
-  --primary: #0b3d91;
-  --primary-text: #ffffff;
-  --ok-bg: #e3f4e8;
-  --ok: #0a5c25;
-  --warn-bg: #fff1d6;
-  --warn: #7a4100;
-  --bad-bg: #fde4e4;
-  --bad: #8f1111;
-  --border: #111111;
-  --focus: #ffb000;
-  --radius: 18px;
+/* ---------- Fonts (served from our own server, no CDN) ---------- */
+@font-face {
+  font-family: "Atkinson Hyperlegible Next";
+  src: url("/vendor/fonts/atkinson-hyperlegible-next-latin-wght-normal.woff2") format("woff2");
+  font-weight: 200 800; font-style: normal; font-display: swap;
+}
+@font-face {
+  font-family: "Atkinson Hyperlegible Next";
+  src: url("/vendor/fonts/atkinson-hyperlegible-next-latin-wght-italic.woff2") format("woff2");
+  font-weight: 200 800; font-style: italic; font-display: swap;
+}
+@font-face {
+  font-family: "Atkinson Hyperlegible Mono";
+  src: url("/vendor/fonts-mono/atkinson-hyperlegible-mono-latin-400-normal.woff2") format("woff2");
+  font-weight: 400; font-style: normal; font-display: swap;
+}
+@font-face {
+  font-family: "Atkinson Hyperlegible Mono";
+  src: url("/vendor/fonts-mono/atkinson-hyperlegible-mono-latin-700-normal.woff2") format("woff2");
+  font-weight: 700; font-style: normal; font-display: swap;
 }
 
-* { box-sizing: border-box; }
+/* ---------- Colour tokens ---------- */
+/* Light (default). Every token is defined here first; the dark blocks only redefine them. */
+:root {
+  --bg: #F5F7FA;          /* cool canvas */
+  --surface: #FFFFFF;     /* cards */
+  --hover: #EFF1F4;       /* neutral hover tint (no pale blue) */
+  --text: #001C64;        /* PayPal deep navy ink */
+  --muted: #3E4A5C;
+  --primary: #0070BA;     /* PayPal blue: the one brand blue for buttons, talk button, links, highlights */
+  --primary-text: #FFFFFF;
+  --link: #0070BA;
+  --accent: #0070BA;
+  --border: #5F6B7A;      /* input and button outlines */
+  --line: #CBD2D6;        /* hairlines */
+  --ok: #0E7A3E;  --on-ok: #FFFFFF;  --ok-bg: #E7F5EC;
+  --warn: #8A4A00; --warn-bg: #FFF3DC;
+  --bad: #C0101A; --on-bad: #FFFFFF; --bad-bg: #FDECEC;
+  --held: #F5A623; --on-held: #001C64;   /* "Waiting for David" badge, same in both themes */
+  --paypal: #0070BA; --on-paypal: #FFFFFF; /* the same PayPal blue, named for the Connect PayPal button */
+  --focus: #0070BA;
+  --shadow: 0 1px 2px rgba(0, 28, 100, .06), 0 10px 28px -14px rgba(0, 28, 100, .22);
+  --radius: 18px;
+  --font: "Atkinson Hyperlegible Next", "Atkinson Hyperlegible", "Segoe UI", Arial, sans-serif;
+  --mono: "Atkinson Hyperlegible Mono", ui-monospace, "Cascadia Mono", Consolas, monospace;
+  color-scheme: light;
+}
+/* Dark: follows the device when the choice is "Auto" */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #071233;
+    --surface: #0E1C47;
+    --hover: #16275A;
+    --text: #F3F6FC;
+    --muted: #B9C5DE;
+    --primary: #0070BA;
+    --primary-text: #FFFFFF;
+    --link: #009CDE;
+    --accent: #009CDE;
+    --border: #8C9CC2;
+    --line: #273A70;
+    --ok: #74D9A1;  --on-ok: #04210F;  --ok-bg: #0D2E27;
+    --warn: #FFC36B; --warn-bg: #2C2412;
+    --bad: #FF9A92; --on-bad: #2A0508; --bad-bg: #3A1520;
+    --focus: #009CDE;
+    --shadow: 0 1px 0 rgba(255, 255, 255, .04), 0 14px 32px -16px rgba(0, 0, 0, .7);
+    color-scheme: dark;
+  }
+}
+/* Dark: chosen on purpose with the "Dark" button (same values as above) */
+:root[data-theme="dark"] {
+  --bg: #071233;
+  --surface: #0E1C47;
+  --hover: #16275A;
+  --text: #F3F6FC;
+  --muted: #B9C5DE;
+  --primary: #0070BA;
+  --primary-text: #FFFFFF;
+  --link: #009CDE;
+  --accent: #009CDE;
+  --border: #8C9CC2;
+  --line: #273A70;
+  --ok: #74D9A1;  --on-ok: #04210F;  --ok-bg: #0D2E27;
+  --warn: #FFC36B; --warn-bg: #2C2412;
+  --bad: #FF9A92; --on-bad: #2A0508; --bad-bg: #3A1520;
+  --focus: #009CDE;
+  --shadow: 0 1px 0 rgba(255, 255, 255, .04), 0 14px 32px -16px rgba(0, 0, 0, .7);
+  color-scheme: dark;
+}
 
+/* ---------- Base ---------- */
+* { box-sizing: border-box; }
 html { font-size: 24px; }
 /* Grace can make everything bigger (A+ buttons); every size uses rem, so the whole page grows. */
 html.text-lg { font-size: 28px; }
@@ -28,127 +108,280 @@ body {
   margin: 0;
   background: var(--bg);
   color: var(--text);
-  font-family: "Atkinson Hyperlegible", "Segoe UI", Verdana, Arial, sans-serif;
+  font-family: var(--font);
   line-height: 1.45;
+  -webkit-font-smoothing: antialiased;
 }
+a { color: var(--link); text-underline-offset: 3px; }
+h1, h2, h3 { line-height: 1.15; text-wrap: balance; }
+p { text-wrap: pretty; }
 
-.wrap { max-width: 860px; margin: 0 auto; padding: 24px 20px 64px; }
-
-header { display: flex; justify-content: space-between; align-items: baseline; gap: 16px; flex-wrap: wrap; }
-.brand { font-size: 1.6rem; font-weight: 800; color: var(--primary); margin: 0; }
-.hello { font-size: 1.1rem; color: var(--muted); margin: 0; }
-
-h1, h2 { line-height: 1.2; }
-.prompt { font-size: 2rem; font-weight: 800; margin: 32px 0 20px; }
-
-button, .button {
-  display: inline-flex; align-items: center; justify-content: center; gap: 14px;
-  min-height: 88px; padding: 16px 28px;
-  font: inherit; font-size: 1.35rem; font-weight: 700;
-  border: 3px solid var(--border); border-radius: var(--radius);
-  background: #ffffff; color: var(--text);
-  cursor: pointer; text-decoration: none;
-}
-button:hover, .button:hover { filter: brightness(0.95); }
-button:disabled { opacity: 0.55; cursor: not-allowed; }
-:focus-visible { outline: 6px solid var(--focus); outline-offset: 4px; }
-
-.primary { background: var(--primary); color: var(--primary-text); border-color: var(--primary); }
-
-.speak {
-  width: 100%; min-height: 180px; font-size: 2rem;
-  background: var(--primary); color: var(--primary-text); border-color: var(--primary);
-}
-.speak svg { width: 64px; height: 64px; flex: none; }
-.speak.listening { background: #8f1111; border-color: #8f1111; }
-
-.row { display: flex; gap: 20px; flex-wrap: wrap; }
-.row > * { flex: 1 1 240px; }
-
-.yes { background: var(--ok); color: #fff; border-color: var(--ok); font-size: 1.8rem; min-height: 120px; }
-.no { background: #ffffff; font-size: 1.8rem; min-height: 120px; }
-
-.card {
-  border: 3px solid var(--border); border-radius: var(--radius);
-  padding: 24px; margin: 28px 0; background: #ffffff;
-}
-.card.ok { background: var(--ok-bg); border-color: var(--ok); }
-.card.warn { background: var(--warn-bg); border-color: var(--warn); }
-.card.bad { background: var(--bad-bg); border-color: var(--bad); }
-.card h2 { margin: 0 0 12px; font-size: 1.9rem; }
-.card p { margin: 0 0 12px; font-size: 1.25rem; }
-.card .big-amount { font-size: 2.4rem; font-weight: 800; line-height: 1.2; }
-
-.said { font-size: 1.1rem; color: var(--muted); font-style: italic; }
-
-details { margin-top: 24px; font-size: 1.1rem; }
-summary { cursor: pointer; font-weight: 700; padding: 12px 0; }
-.typed-form { display: flex; gap: 12px; flex-wrap: wrap; margin-top: 8px; }
-.typed-form input {
-  flex: 1 1 320px; min-height: 72px; font: inherit; font-size: 1.2rem;
-  padding: 12px 16px; border: 3px solid var(--border); border-radius: 12px;
-}
-.typed-form button { min-height: 72px; }
-
-.banner { border: 3px solid var(--warn); background: var(--warn-bg); border-radius: var(--radius); padding: 20px 24px; margin: 24px 0; }
-.banner p { margin: 0 0 14px; font-size: 1.2rem; }
-
-.examples { margin-top: 40px; border-top: 2px solid #d0d0d0; padding-top: 16px; }
-.examples h2 { font-size: 1rem; color: var(--muted); margin: 0 0 8px; }
-.examples button { min-height: 56px; font-size: 0.85rem; font-weight: 600; margin: 6px 6px 0 0; padding: 10px 16px; border-width: 2px; }
-
+.wrap { max-width: 860px; margin: 0 auto; padding: 20px 20px 72px; }
 .hidden { display: none !important; }
 .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
-
-.choose { display: grid; gap: 24px; margin-top: 32px; }
-.choose a { min-height: 140px; font-size: 1.6rem; }
-.note { color: var(--muted); font-size: 0.9rem; }
-
-.why-title { font-size: 1.3rem; margin: 16px 0 8px; }
-.why-list { margin: 0 0 16px; padding-left: 1.2em; font-size: 1.25rem; }
-.why-list li { margin-bottom: 8px; }
-
-/* ---------- Accessibility (feature 9) ---------- */
+:focus-visible { outline: 4px solid var(--focus); outline-offset: 4px; border-radius: 6px; }
+/* Headings and areas focused by code (for screen readers) don't need a focus box */
+[tabindex="-1"]:focus { outline: none; }
 
 /* "Skip to main content": first thing a keyboard user reaches; visible only when focused. */
 .skip-link {
   position: absolute; left: 12px; top: -200px; z-index: 100;
   background: var(--primary); color: var(--primary-text);
-  padding: 14px 22px; border-radius: 12px; font-weight: 800; text-decoration: none;
+  padding: 14px 22px; border-radius: 999px; font-weight: 800; text-decoration: none;
 }
 .skip-link:focus { top: 12px; }
 
-/* Grace's comfort settings: text size and voice speed */
-.settings { display: flex; flex-wrap: wrap; gap: 10px 24px; align-items: center; margin: 16px 0 0; padding: 0; border: 0; }
-.settings .group { display: flex; gap: 8px; align-items: center; }
-.settings .group-label { font-size: 0.85rem; font-weight: 700; color: var(--muted); }
-.settings button { min-height: 56px; min-width: 64px; padding: 8px 14px; font-size: 0.9rem; border-width: 2px; }
-.settings button[aria-pressed="true"] { background: var(--text); color: #fff; border-color: var(--text); }
+/* Small labels: "PAY TO", "AMOUNT", "FAMILY CHECK" */
+.eyebrow {
+  font-family: var(--mono); font-size: .62rem; font-weight: 700;
+  letter-spacing: .12em; text-transform: uppercase; color: var(--muted); margin: 0;
+}
 
-/* A visible label above inputs (placeholders alone disappear and are hard to read) */
+/* ---------- Header ---------- */
+.topbar { display: flex; justify-content: space-between; align-items: center; gap: 12px 20px; flex-wrap: wrap; padding-bottom: 14px; border-bottom: 1px solid var(--line); }
+.brand { display: inline-flex; align-items: center; gap: 10px; font-size: 1.15rem; font-weight: 800; letter-spacing: -.01em; color: var(--text); margin: 0; text-decoration: none; }
+.brand .dash { color: var(--link); }
+.mark { width: 1.6em; height: 1.6em; flex: none; }
+.mark .tile { fill: var(--primary); }
+.mark .glyph { fill: none; stroke: var(--primary-text); stroke-width: 2.4; stroke-linecap: round; stroke-linejoin: round; }
+.hello { font-size: .85rem; color: var(--muted); margin: 0; }
+.tag {
+  font-family: var(--mono); font-size: .55rem; font-weight: 700; letter-spacing: .1em; text-transform: uppercase;
+  color: var(--text); border: 2px solid var(--text); padding: 2px 8px; border-radius: 999px;
+}
+
+/* ---------- Buttons (pill shaped, like PayPal's) ---------- */
+button, .button {
+  display: inline-flex; align-items: center; justify-content: center; gap: 12px;
+  min-height: 80px; padding: 14px 30px;
+  font: inherit; font-size: 1.2rem; font-weight: 700; line-height: 1.2;
+  border: 2px solid var(--primary); border-radius: 999px;
+  background: transparent; color: var(--text);
+  cursor: pointer; text-decoration: none; text-align: center;
+  transition: background-color .15s, transform .1s;
+}
+button:hover, .button:hover { background-color: var(--hover); }
+button:active, .button:active { transform: scale(.98); }
+button:disabled { opacity: .55; cursor: not-allowed; }
+
+.primary { background: var(--primary); color: var(--primary-text); border-color: var(--primary); }
+.primary:hover { background: var(--primary); filter: brightness(1.12); }
+
+.yes { background: var(--ok); color: var(--on-ok); border-color: var(--ok); font-size: 1.6rem; min-height: 112px; }
+.yes:hover { background: var(--ok); filter: brightness(1.08); }
+.no { font-size: 1.6rem; min-height: 112px; }
+
+.row { display: flex; gap: 16px; flex-wrap: wrap; }
+.row > * { flex: 1 1 240px; }
+
+/* ---------- The talk button (round "magnet") ---------- */
+.prompt { font-size: 2rem; font-weight: 800; letter-spacing: -.015em; margin: 32px 0 20px; }
+.speak {
+  width: 100%; min-height: 0; padding: 18px 12px 22px;
+  display: grid; justify-items: center; gap: 16px;
+  border: 2px solid var(--line); border-radius: var(--radius);
+  background: var(--surface); box-shadow: var(--shadow);
+  font-size: 1.5rem; font-weight: 800; color: var(--text);
+}
+.speak:hover { background: var(--surface); border-color: var(--border); }
+.speak-disc {
+  width: 8.4rem; height: 8.4rem; border-radius: 50%;
+  display: grid; place-items: center; position: relative;
+  background: var(--primary); color: var(--primary-text);
+  box-shadow: 0 0 0 .3rem var(--surface), 0 0 0 .55rem var(--primary);
+}
+.speak-disc svg { width: 3rem; height: 3rem; }
+.speak-disc::after {
+  content: ""; position: absolute; inset: -.55rem; border-radius: 50%;
+  border: 4px solid var(--link); opacity: 0;
+}
+.speak.listening .speak-disc::after { animation: listen 1.6s ease-out infinite; }
+.speak.listening #speak-label { color: var(--link); }
+@keyframes listen { 0% { transform: scale(1); opacity: .9; } 100% { transform: scale(1.35); opacity: 0; } }
+
+.note { color: var(--muted); font-size: .85rem; }
+.said { font-size: 1rem; color: var(--muted); font-style: italic; }
+
+/* ---------- Cards ---------- */
+.card {
+  background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius);
+  box-shadow: var(--shadow); padding: 26px 24px; margin: 28px 0;
+}
+.card h2 { margin: 0 0 12px; font-size: 1.7rem; font-weight: 800; letter-spacing: -.01em; }
+.card p { margin: 0 0 12px; font-size: 1.1rem; }
+.card.ok { background: var(--ok-bg); border-color: var(--ok); }
+.card.warn { background: var(--warn-bg); border-color: var(--warn); }
+.card.bad { background: var(--bad-bg); border-color: var(--bad); }
+
+/* The confirm step, laid out like a cheque */
+.cheque { position: relative; overflow: hidden; padding-top: 34px; }
+.cheque::before {
+  content: ""; position: absolute; left: 0; right: 0; top: 0; height: 10px;
+  background: repeating-linear-gradient(135deg, var(--accent) 0 2px, transparent 2px 7px);
+  opacity: .75;
+}
+.cheque-lines { display: grid; gap: 18px; margin: 18px 0 22px; }
+.cheque-lines > div { display: grid; gap: 4px; }
+.cheque-lines dt { font-family: var(--mono); font-size: .62rem; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; color: var(--muted); }
+.cheque-lines dd { margin: 0; }
+.payee { font-size: 1.7rem; font-weight: 800; padding-bottom: 6px; border-bottom: 2px dotted var(--border); }
+.amount {
+  display: inline-block; font-family: var(--mono); font-weight: 700; font-size: 2.4rem;
+  font-variant-numeric: tabular-nums; letter-spacing: -.02em; line-height: 1.1;
+  border: 2px solid var(--text); border-radius: 10px; padding: 6px 16px;
+}
+.memo { font-size: 1.05rem; font-style: italic; color: var(--muted); }
+
+/* Status pill on every result: shape and words, not colour alone */
+.status {
+  display: inline-flex; align-items: center; gap: 8px; margin: 0 0 14px;
+  font-size: .8rem; font-weight: 800; letter-spacing: .02em;
+  padding: 6px 14px 6px 10px; border-radius: 999px; border: 2px solid currentColor;
+}
+.status svg { width: 1.1em; height: 1.1em; flex: none; }
+.card.ok .status { color: var(--ok); }
+.card.warn .status { color: var(--on-held); background: var(--held); border-color: var(--held); }
+.card.bad .status { color: var(--bad); }
+.card .big-amount { font-size: 2.4rem; font-weight: 800; line-height: 1.2; }
+.card .eyebrow { font-size: .62rem; margin: 0 0 6px; }
+
+/* David's decision, signed like a cheque */
+.signoff { display: flex; align-items: center; gap: 12px; margin: 6px 0 16px; padding-top: 12px; border-top: 2px solid var(--line); font-size: 1rem; font-weight: 700; }
+.signoff .initial { width: 2.2rem; height: 2.2rem; border-radius: 50%; display: grid; place-items: center; background: var(--primary); color: var(--primary-text); font-weight: 800; flex: none; }
+
+.why-title { font-size: 1.15rem; margin: 18px 0 8px; }
+.why-list { margin: 0 0 16px; padding-left: 1.1em; font-size: 1.1rem; }
+.why-list li { margin-bottom: 8px; }
+.why-list li::marker { color: var(--link); }
+
+/* ---------- Forms ---------- */
+details { margin-top: 22px; font-size: 1rem; }
+summary { cursor: pointer; font-weight: 700; padding: 12px 0; color: var(--link); text-decoration: underline; text-underline-offset: 4px; }
 .field-label { display: block; width: 100%; font-weight: 700; margin-bottom: 4px; }
+.typed-form { display: flex; gap: 12px; flex-wrap: wrap; margin-top: 8px; }
+.typed-form input, .rules-form input[type="number"], .email-input, .select {
+  font: inherit; color: var(--text); background: var(--surface);
+  border: 2px solid var(--border); border-radius: 14px; padding: 12px 16px;
+}
+.typed-form input { flex: 1 1 320px; min-height: 72px; font-size: 1.1rem; }
+.typed-form button { min-height: 72px; }
+input::placeholder { color: var(--muted); opacity: .8; }
 
-/* "Say it again" button */
-.repeat { min-height: 64px; font-size: 1.05rem; margin-top: 8px; }
+/* ---------- Connect PayPal (PayPal's own button colour, nowhere else) ---------- */
+/* A solid PayPal-blue panel; the button inside is PayPal's white version */
+.banner { background: var(--paypal); color: var(--on-paypal); border-radius: var(--radius); padding: 22px 24px; margin: 22px 0; box-shadow: var(--shadow); }
+.banner h2 { margin: 0 0 8px; font-size: 1.3rem; }
+.banner p { margin: 0 0 14px; font-size: 1rem; }
+.paypal-button { background: var(--on-paypal); color: var(--paypal); border-color: var(--on-paypal); }
+.paypal-button:hover { background: var(--on-paypal); filter: brightness(.94); }
+.banner :focus-visible { outline-color: var(--on-paypal); }
+
+/* ---------- Comfort settings: text size, voice speed, screen ---------- */
+.settings { display: flex; flex-wrap: wrap; gap: 10px 22px; align-items: center; padding: 12px 0; border-bottom: 1px solid var(--line); }
+.group { display: inline-flex; align-items: center; gap: 4px; flex-wrap: wrap; }
+.group-label { font-family: var(--mono); font-size: .55rem; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; color: var(--muted); margin-right: 6px; }
+.group button { min-height: 48px; min-width: 56px; padding: 6px 14px; font-size: .75rem; border-width: 2px; border-color: var(--line); }
+.group button[aria-pressed="true"] { background: var(--primary); color: var(--primary-text); border-color: var(--primary); }
+
+/* "Say it again" */
+.repeat { min-height: 64px; font-size: 1rem; margin-top: 10px; }
 
 /* Keyboard hints */
-.keys { font-size: 0.85rem; color: var(--muted); margin: 12px 0 0; }
+.keys { font-size: .75rem; color: var(--muted); margin: 14px 0 0; }
 kbd {
   display: inline-block; min-width: 1.6em; padding: 0 6px; text-align: center;
-  border: 2px solid var(--text); border-radius: 6px; font: inherit; font-weight: 800; background: #fff;
+  border: 2px solid var(--text); border-radius: 6px; font: inherit; font-weight: 800; background: var(--surface);
 }
 
-/* Headings that receive focus from code should not show a big focus box for mouse users */
-[tabindex="-1"]:focus:not(:focus-visible) { outline: none; }
+/* ---------- Safety rules ---------- */
+.rules { margin-top: 36px; }
+.rules > h2 { font-size: 1.4rem; margin: 6px 0 12px; }
+.rules-form { display: grid; gap: 14px; margin-top: 12px; max-width: 640px; }
+.rules-form input[type="number"] { min-height: 72px; font-size: 1.2rem; max-width: 260px; }
+.choices { border: 0; padding: 0; margin: 0; display: grid; gap: 8px; }
+.choices label, .check { display: flex; align-items: center; gap: 14px; font-size: 1rem; min-height: 56px; cursor: pointer; }
+.choices input, .check input { width: 30px; height: 30px; flex: none; accent-color: var(--primary); }
+.rules-message { font-weight: 700; margin: 0; min-height: 1.4em; }
+.rules-message.ok { color: var(--ok); }
+.rules-message.bad { color: var(--bad); }
+.alert-box { border: 2px solid var(--bad); background: var(--bad-bg); color: var(--text); border-radius: 14px; padding: 14px 18px; margin: 14px 0; font-weight: 700; }
 
-/* Windows High Contrast / forced colours: keep borders and focus visible */
+/* ---------- Demo examples ---------- */
+.examples { margin-top: 40px; padding-top: 16px; border-top: 1px solid var(--line); }
+.examples h2 { margin: 0 0 8px; }
+.examples button { min-height: 52px; font-size: .75rem; font-weight: 700; margin: 6px 6px 0 0; padding: 8px 16px; border-color: var(--line); }
+
+/* ---------- Landing page ---------- */
+.hero { display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(0, .9fr); gap: 40px; align-items: center; margin: 40px 0 28px; }
+@media (max-width: 860px) { .hero { grid-template-columns: 1fr; } }
+.hero h1 { font-size: clamp(1.8rem, 5vw, 2.6rem); font-weight: 800; letter-spacing: -.025em; margin: 10px 0 14px; }
+.hero .lede { font-size: 1rem; color: var(--muted); max-width: 34ch; margin: 0 0 22px; }
+.choose { display: grid; gap: 14px; }
+.choice {
+  display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 16px;
+  min-height: 0; padding: 18px 20px; border-radius: var(--radius); text-align: left;
+  background: var(--surface); border: 2px solid var(--line); color: var(--text); box-shadow: var(--shadow);
+}
+.choice:hover { border-color: var(--primary); background: var(--surface); }
+.choice.main { background: var(--primary); color: var(--primary-text); border-color: var(--primary); }
+.choice.main:hover { background: var(--primary); filter: brightness(1.12); }
+.choice .who { width: 2.6rem; height: 2.6rem; border-radius: 50%; display: grid; place-items: center; font-weight: 800; border: 2px solid var(--link); color: var(--link); }
+.choice.main .who { background: var(--primary-text); color: var(--primary); }
+.choice b { display: block; font-size: 1rem; }
+.choice span.sub { display: block; font-size: .72rem; font-weight: 400; color: var(--muted); }
+.choice.main span.sub { color: var(--primary-text); }
+.choice .arrow { font-size: 1.2rem; }
+.hero h1 .hl { color: var(--link); }
+
+.preview { position: relative; }
+.preview .card { margin: 0; }
+.preview .card + .card { margin: -26px 0 0 28px; position: relative; }
+.preview .amount { font-size: 1.6rem; }
+.preview .payee { font-size: 1.1rem; }
+.preview p { font-size: .8rem; }
+.preview .status { font-size: .62rem; }
+
+.steps { list-style: none; padding: 0; margin: 12px 0 0; display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 14px; counter-reset: step; }
+.steps li { counter-increment: step; background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 18px; font-size: .78rem; }
+.steps li::before { content: counter(step); display: grid; place-items: center; width: 1.8rem; height: 1.8rem; border-radius: 50%; border: 2px solid var(--text); font-family: var(--mono); font-weight: 700; margin-bottom: 10px; }
+.steps b { display: block; font-size: .9rem; margin-bottom: 4px; }
+.footnote { font-size: .7rem; color: var(--muted); border-top: 1px solid var(--line); padding-top: 14px; margin-top: 36px; }
+
+/* ---------- Motion: short, and only for real changes. All of it is off with "reduce motion". ---------- */
+/* Every animation starts from a hidden state and ends at the normal look, so with motion off nothing is missing. */
+@keyframes rise { from { opacity: 0; transform: translateY(14px); } }
+@keyframes draw { from { stroke-dashoffset: 40; } }
+@keyframes breathe { 50% { box-shadow: 0 0 0 6px rgba(245, 166, 35, .35); } }
+@keyframes sign { from { background-size: 0 2px; } }
+@keyframes bump { 40% { transform: scale(1.35); } }
+@keyframes blink { 0%, 80%, 100% { opacity: .25; } 40% { opacity: 1; } }
+
+.enter { animation: rise .35s ease-out both; }                                  /* new step, result, held card */
+.card.ok .status svg path { stroke-dasharray: 40; animation: draw .5s .15s ease-out both; } /* tick draws itself */
+.card.warn .status, .held-status { animation: breathe 2.4s ease-in-out infinite; }  /* still waiting */
+#result-signoff-text { background: linear-gradient(currentColor, currentColor) no-repeat 0 100% / 100% 2px; padding-bottom: 2px; }
+.signoff.enter #result-signoff-text { animation: sign .6s .25s ease-out both; }  /* David "signs" */
+.bump { animation: bump .4s ease-out; }                                          /* waiting count */
+.result-amount { display: block; width: max-content; margin: 0 0 12px; }
+
+/* "Checking..." while the AI looks at the payment */
+.thinking { display: flex; align-items: center; gap: 6px; font-size: 1rem; font-weight: 700; color: var(--link); margin: 14px 0 0; }
+.thinking i { width: .4em; height: .4em; border-radius: 50%; background: currentColor; animation: blink 1.2s infinite; }
+.thinking i:nth-child(2) { animation-delay: .2s; }
+.thinking i:nth-child(3) { animation-delay: .4s; }
+
+/* Landing: example cards arrive one after the other; cards lift on hover */
+.preview .card { animation: rise .5s ease-out both; }
+.preview .card + .card { animation-delay: .18s; }
+.choice, .steps li { transition: transform .15s ease-out, box-shadow .15s ease-out, border-color .15s; }
+.choice:hover, .steps li:hover { transform: translateY(-3px); box-shadow: 0 16px 30px -18px rgba(0, 28, 100, .45); }
+
+/* ---------- Accessibility extras ---------- */
 @media (forced-colors: active) {
-  button, .button, .card, .banner, .risk, .count, .tag { border: 3px solid CanvasText; }
+  button, .button, .card, .banner, .risk, .count, .tag, .status { border: 3px solid CanvasText; }
   :focus-visible { outline: 6px solid Highlight; }
-  .speak.listening { outline: 6px dashed Highlight; }
+  .speak.listening .speak-disc { outline: 6px dashed Highlight; }
 }
-
-/* People who ask their device for less motion get none */
 @media (prefers-reduced-motion: reduce) {
-  * { scroll-behavior: auto !important; transition: none !important; animation: none !important; }
+  *, *::before, *::after { scroll-behavior: auto !important; transition: none !important; animation: none !important; }
 }

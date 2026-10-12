@@ -4,18 +4,74 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Kin-bill</title>
+  <meta name="description" content="Voice payments with a family safety check. Risky payments wait for someone you trust.">
   <link rel="stylesheet" href="/styles.css">
+  <meta name="color-scheme" content="light dark">
+  <meta name="theme-color" content="#F5F7FA" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#071233" media="(prefers-color-scheme: dark)">
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+  <script src="/theme.js"></script>
+  <style>
+    /* Landing page only: smaller base size so the overview fits one screen */
+    html:has(body.landing) { font-size: 22px; }
+    .landing .wrap { max-width: 1120px; }
+  </style>
 </head>
-<body>
-  <main class="wrap">
-    <h1 class="brand">Kin-bill</h1>
-    <p class="prompt">Your family has your back before money moves.</p>
-    <p>Pay people by voice. If a payment looks risky, it waits for someone you trust.</p>
-    <nav class="choose" aria-label="Choose a screen">
-      <a class="button primary" href="/grace.html">I want to pay someone (Grace's screen)</a>
-      <a class="button" href="/david.html">I'm the helper (David's screen)</a>
-    </nav>
-    <p class="note">PayPal sandbox demo. No real money is used.</p>
-  </main>
+<body class="landing">
+  <a class="skip-link" href="#main">Skip to main content</a>
+  <div class="wrap">
+    <header class="topbar">
+      <a class="brand" href="/"><svg class="mark" viewBox="0 0 32 32" aria-hidden="true"><rect class="tile" width="32" height="32" rx="9"/><circle class="glyph" cx="16" cy="16" r="9"/><path class="glyph" d="M12 16.4l2.8 2.8 5.4-6"/></svg><span>Kin<span class="dash">-</span>bill</span> <span class="tag">Sandbox demo</span></a>
+      <div data-theme-switch></div>
+    </header>
+
+    <main id="main" tabindex="-1">
+      <section class="hero" aria-labelledby="hero-title">
+        <div>
+          <p class="eyebrow">Voice payments with a family safety check</p>
+          <h1 id="hero-title">Your family has your back <span class="hl">before money moves.</span></h1>
+          <p class="lede">Grace, 74, pays people by speaking. An AI scam check and her own rules decide: safe payments go straight through PayPal, risky ones wait for her son David.</p>
+          <nav class="choose" aria-label="Choose a screen">
+            <a class="button choice main" href="/grace.html">
+              <span class="who" aria-hidden="true">G</span>
+              <span><b>I want to pay someone</b><span class="sub">Grace's screen: speak, check, send</span></span>
+              <span class="arrow" aria-hidden="true">&rarr;</span>
+            </a>
+            <a class="button choice" href="/david.html">
+              <span class="who" aria-hidden="true">D</span>
+              <span><b>I'm the helper</b><span class="sub">David's screen: review held payments</span></span>
+              <span class="arrow" aria-hidden="true">&rarr;</span>
+            </a>
+          </nav>
+        </div>
+
+        <figure class="preview" aria-label="Example: a normal payment and a payment held for David" style="margin:0">
+          <div class="card cheque">
+            <p class="eyebrow">Please check before it goes</p>
+            <dl class="cheque-lines" style="margin-bottom:0">
+              <div><dt>Pay to</dt><dd class="payee">Joe the plumber</dd></div>
+              <div><dt>Amount</dt><dd><span class="amount">$80.00</span></dd></div>
+            </dl>
+          </div>
+          <div class="card warn">
+            <p class="status"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"><path d="M9 6v12M15 6v12"/></svg>Waiting for David</p>
+            <p style="font-weight:800;font-size:1.2rem;margin-bottom:6px"><span class="amount" style="border:0;padding:0;font-size:1.4rem">$600.00</span> to "PayPal security"</p>
+            <p style="margin:0">Someone may be pretending to be a company. No money has moved.</p>
+          </div>
+        </figure>
+      </section>
+
+      <section aria-labelledby="how-title">
+        <h2 id="how-title" class="eyebrow">How it works</h2>
+        <ol class="steps">
+          <li><b>Grace says it</b>"Pay my plumber Joe 80 dollars." Kin-bill reads it back and she answers yes or no.</li>
+          <li><b>AI checks, her rules decide</b>An AI looks for scam signs. Plain rules she set with David decide. The AI never moves money.</li>
+          <li><b>Paid, or held for David</b>Safe: paid through PayPal at once. Risky: held until David approves. No answer in time: cancelled, nothing moves.</li>
+        </ol>
+      </section>
+
+      <p class="footnote">PayPal sandbox demo: no real money is used. Kin-bill is an independent project built on PayPal's APIs for the PayPal "Build What's Next" hackathon. It is not made or endorsed by PayPal.</p>
+    </main>
+  </div>
 </body>
 </html>

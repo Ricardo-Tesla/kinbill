@@ -67,28 +67,59 @@ export function contrast(a, b) {
 }
 
 const css = read('styles.css');
-const v = Object.fromEntries([...css.matchAll(/--([\w-]+):\s*(#[0-9a-fA-F]{6})/g)].map((m) => [m[1], m[2]]));
 
-test('contrast: Grace\'s main text is AAA (7:1 or more)', () => {
-  assert.ok(contrast(v.text, v.bg) >= 7);
-  assert.ok(contrast(v['primary-text'], v.primary) >= 7, 'white on blue buttons');
-  assert.ok(contrast(v.muted, v.bg) >= 7, 'grey notes');
+// Reads the colour tokens from one CSS block, e.g. the light ":root {" block or a dark block.
+function tokensIn(selectorStart) {
+  const from = css.indexOf(selectorStart);
+  assert.ok(from >= 0, `missing CSS block: ${selectorStart}`);
+  const block = css.slice(from, css.indexOf('}', from));
+  return Object.fromEntries([...block.matchAll(/--([\w-]+):\s*(#[0-9a-fA-F]{6})/g)].map((m) => [m[1], m[2]]));
+}
+const light = tokensIn(':root {');
+const darkAuto = tokensIn(':root:not([data-theme="light"]) {');
+const darkChosen = tokensIn(':root[data-theme="dark"] {');
+const THEMES = { light, dark: { ...light, ...darkChosen } };
+
+test('one PayPal blue everywhere: buttons, the Connect PayPal panel and both themes use #0070BA', () => {
+  assert.equal(light.primary, '#0070BA');
+  assert.equal(light.paypal, '#0070BA');
+  assert.equal(THEMES.dark.primary, '#0070BA');
+  assert.ok(!/#EAF4FB/i.test(css), 'no pale blue wash');
 });
 
-test('contrast: every coloured message is at least AA (4.5:1)', () => {
-  const pairs = [
-    ['ok', 'ok-bg'], ['warn', 'warn-bg'], ['bad', 'bad-bg'],
-    ['text', 'ok-bg'], ['text', 'warn-bg'], ['text', 'bad-bg'],
-    ['ok', 'bg'], ['warn', 'bg'], ['bad', 'bg'],
-  ];
-  for (const [fg, bg] of pairs) {
-    const ratio = contrast(v[fg], v[bg]);
-    assert.ok(ratio >= 4.5, `${fg} on ${bg} is only ${ratio.toFixed(2)}:1`);
-  }
-  assert.ok(contrast('#ffffff', v.ok) >= 4.5, 'white on green "Yes" button');
-  assert.ok(contrast('#ffffff', v.warn) >= 4.5, 'white on the orange count badge');
+test('dark theme: "Auto" (device setting) and the "Dark" button use exactly the same colours', () => {
+  assert.deepEqual(darkAuto, darkChosen);
+  for (const name of Object.keys(darkChosen)) assert.ok(name in light, `--${name} must also be defined for light`);
 });
+
+for (const [name, v] of Object.entries(THEMES)) {
+  test(`contrast (${name}): main text and notes are AAA (7:1 or more), buttons AAA for large text`, () => {
+    assert.ok(contrast(v.text, v.bg) >= 7, 'text on page');
+    assert.ok(contrast(v.text, v.surface) >= 7, 'text on cards');
+    // Buttons use large bold text (28 px+ on Grace's screen), where AAA needs 4.5:1
+    assert.ok(contrast(v['primary-text'], v.primary) >= 4.5, 'main buttons');
+    assert.ok(contrast(v.muted, v.bg) >= 7, 'grey notes');
+    assert.ok(contrast(v.muted, v.surface) >= 7, 'grey notes on cards');
+  });
+
+  test(`contrast (${name}): coloured messages, links and controls are at least AA`, () => {
+    const pairs = [
+      ['ok', 'ok-bg'], ['warn', 'warn-bg'], ['bad', 'bad-bg'],
+      ['text', 'ok-bg'], ['text', 'warn-bg'], ['text', 'bad-bg'],
+      ['ok', 'surface'], ['warn', 'surface'], ['bad', 'surface'],
+      ['on-ok', 'ok'], ['on-bad', 'bad'], ['on-held', 'held'], ['on-paypal', 'paypal'],
+      ['link', 'bg'], ['link', 'surface'], ['text', 'hover'], ['paypal', 'on-paypal'],
+    ];
+    for (const [fg, bg] of pairs) {
+      const ratio = contrast(v[fg], v[bg]);
+      assert.ok(ratio >= 4.5, `${fg} on ${bg} is only ${ratio.toFixed(2)}:1`);
+    }
+    // Outlines of inputs and the focus ring need 3:1 (WCAG 1.4.11)
+    assert.ok(contrast(v.border, v.surface) >= 3, 'input borders');
+    assert.ok(contrast(v.focus, v.bg) >= 3, 'focus ring');
+  });
+}
 
 test('focus outline is thick and visible', () => {
-  assert.match(css, /:focus-visible\s*\{\s*outline:\s*6px solid/);
+  assert.match(css, /:focus-visible\s*\{\s*outline:\s*4px solid var\(--focus\)/);
 });

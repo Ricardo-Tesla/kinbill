@@ -6,10 +6,12 @@ const els = {
   hello: $('hello'), banner: $('link-banner'), linkButton: $('link-button'),
   ask: $('ask'), prompt: $('prompt'), speak: $('speak'), speakLabel: $('speak-label'),
   typedForm: $('typed-form'), typed: $('typed'), typeInstead: $('type-instead'),
-  confirm: $('confirm'), confirmText: $('confirm-text'), confirmSaid: $('confirm-said'),
+  confirm: $('confirm'), confirmPayee: $('confirm-payee'), confirmAmount: $('confirm-amount'), confirmSaid: $('confirm-said'),
   yes: $('yes'), no: $('no'),
   result: $('result'), resultTitle: $('result-title'), resultText: $('result-text'), resultDetail: $('result-detail'),
   resultWhy: $('result-why'), resultReasons: $('result-reasons'),
+  resultAmount: $('result-amount'), thinking: $('thinking'),
+  resultStatus: $('result-status'), resultSignoff: $('result-signoff'), resultSignoffText: $('result-signoff-text'),
   again: $('again'), live: $('live'),
 };
 
@@ -79,19 +81,71 @@ async function api(path, body) {
 
 // ---------- Screens ----------
 
+const calm = () => window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+
+// Replays a short entrance animation (CSS class "enter") on an element.
+function enter(el) {
+  el.classList.remove('enter');
+  void el.offsetWidth; // restart the animation
+  el.classList.add('enter');
+}
+
+// Counts an amount up from $0 (about half a second). Shows it straight away with "reduce motion".
+function countUp(el, amount) {
+  if (calm()) { el.textContent = money(amount); return; }
+  const start = performance.now();
+  const step = (now) => {
+    const t = Math.min(1, (now - start) / 600);
+    el.textContent = money(amount * (1 - (1 - t) ** 3));
+    if (t < 1) requestAnimationFrame(step);
+  };
+  requestAnimationFrame(step);
+}
+
 function show(section) {
   for (const s of [els.ask, els.confirm, els.result]) s.classList.toggle('hidden', s !== section);
+  if (section !== els.ask) enter(section);
   // The browser tab title says where Grace is (screen readers read it when she switches tabs).
   const step = section === els.confirm ? 'Is this right?' : section === els.result ? els.resultTitle.textContent : 'Who would you like to pay?';
   document.title = `${step} - Kin-bill`;
+}
+
+function clock(iso) {
+  const d = iso ? new Date(iso) : new Date();
+  return d.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
 }
 
 function money(n) {
   return `$${Number(n).toFixed(2)}`;
 }
 
-function showResult(kind, title, text, detail = '', reasons = []) {
+// Every result says what happened in words and with a shape, not only with colour.
+const STATUS_ICONS = {
+  ok: '<path d="M5 12.5l4.5 4.5L19 7.5"/>',
+  warn: '<path d="M9 6v12M15 6v12"/>',
+  bad: '<path d="M7 7l10 10M17 7L7 17"/>',
+  '': '<path d="M6 12h12"/>',
+};
+function statusLabel(kind) {
+  return { ok: 'Sent', warn: `Waiting for ${status.helperName}`, bad: 'Not sent', '': 'Cancelled' }[kind] ?? '';
+}
+
+function showResult(kind, title, text, detail = '', reasons = [], { label, signoff, amount } = {}) {
+  els.resultAmount.classList.toggle('hidden', amount === undefined);
+  if (amount !== undefined) {
+    if (kind === 'ok') countUp(els.resultAmount, amount);
+    else els.resultAmount.textContent = money(amount);
+  }
   els.result.className = `card ${kind}`;
+  const icon = `<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">${STATUS_ICONS[kind] ?? STATUS_ICONS['']}</svg>`;
+  els.resultStatus.innerHTML = icon;
+  els.resultStatus.append(label || statusLabel(kind));
+  els.resultSignoff.classList.toggle('hidden', !signoff);
+  if (signoff) {
+    els.resultSignoff.querySelector('.initial').textContent = status.helperName.charAt(0);
+    els.resultSignoffText.textContent = signoff;
+    enter(els.resultSignoff);
+  }
   els.resultTitle.textContent = title;
   els.resultText.textContent = text;
   els.resultDetail.textContent = detail;
@@ -117,9 +171,10 @@ async function handleRequest(text) {
   if (busy || !text) return;
   busy = true;
   setListening(false, 'Checking...');
+  els.thinking.classList.remove('hidden');
   announce('Checking, one moment.');
   try {
-    const r = await api('/api/requests', { text });
+    const r = await api('/api/requests', { text }).finally(() => els.thinking.classList.add('hidden'));
     if (r.needsRetry) {
       busy = false;
       setListening(false);
@@ -127,8 +182,9 @@ async function handleRequest(text) {
       return;
     }
     current = r.payment;
-    els.confirmText.textContent = `Pay ${current.payeeName} ${money(current.amount)}?`;
-    els.confirmSaid.textContent = `You said: "${current.said}"`;
+    els.confirmPayee.textContent = current.payeeName;
+    els.confirmAmount.textContent = money(current.amount);
+    els.confirmSaid.textContent = `"${current.said}"`;
     show(els.confirm);
     els.yes.focus();
     await say(r.spoken);
@@ -167,11 +223,11 @@ async function answer(yes) {
     const p = r.payment;
     shownId = p.id;
     if (p.status === 'PAYING' || p.status === 'PAID') {
-      showResult('ok', `Sent ${money(p.amount)} to ${p.payeeName}`, r.spoken, 'It usually arrives within a minute or two.');
+      showResult('ok', `Sent to ${p.payeeName}`, r.spoken, 'It usually arrives within a minute or two.', [], { amount: p.amount });
       watchUntilPaid(p.id);
     } else if (p.status === 'HELD') {
       showResult('warn', `Paused: ${status.helperName} will check it`, r.spoken,
-        'No money has been sent. The payment is waiting safely.', p.graceReasons || []);
+        'No money has been sent. The payment is waiting safely.', p.graceReasons || [], { amount: p.amount });
       watchHeld(p.id);
     } else {
       showResult('bad', 'Not sent', r.spoken);
@@ -180,7 +236,7 @@ async function answer(yes) {
   } catch (err) {
     if (err.code === 'NOT_LINKED') {
       els.banner.classList.remove('hidden');
-      showResult('bad', 'Connect PayPal first', 'Please connect your PayPal, then try again.');
+      showResult('bad', 'Connect PayPal first', 'Please connect your PayPal, then try again.', '', [], { label: 'Not connected' });
       await say('Please connect your PayPal first, then try again.');
     } else {
       showResult('bad', 'Not sent', `Sorry, ${err.message} No money was sent.`);
@@ -202,18 +258,19 @@ async function watchHeld(id) {
     try { p = await api(`/api/requests/${id}`); } catch { continue; }
     if (p.status === 'HELD') continue;
     if (!stillShown()) return;
+    const signed = `Checked by ${status.helperName} · ${clock(p.decidedAt)}`;
     if (p.status === 'PAYING' || p.status === 'PAID') {
       const msg = `${status.helperName} approved your payment to ${p.payeeName}. ${money(p.amount)} is on its way.`;
-      showResult('ok', `${status.helperName} approved it`, msg, 'It usually arrives within a minute or two.');
+      showResult('ok', `${status.helperName} approved it`, msg, 'It usually arrives within a minute or two.', [], { label: 'Approved and sent', signoff: signed, amount: p.amount });
       await say(msg);
       watchUntilPaid(id);
     } else if (p.status === 'REJECTED') {
       const msg = `${status.helperName} decided not to send this payment to ${p.payeeName}. No money was sent.`;
-      showResult('bad', 'Not sent', msg, `If you are unsure, you can call ${status.helperName}.`);
+      showResult('bad', 'Not sent', msg, `If you are unsure, you can call ${status.helperName}.`, [], { label: `Stopped by ${status.helperName}`, signoff: signed });
       await say(msg);
     } else if (p.status === 'EXPIRED') {
       const msg = 'No one approved this payment in time, so it was cancelled. No money was sent.';
-      showResult('bad', 'Cancelled', msg);
+      showResult('bad', 'Cancelled', msg, '', [], { label: 'Cancelled: no answer in time' });
       await say(msg);
     }
     return;
@@ -339,6 +396,72 @@ document.addEventListener('keydown', (e) => {
   else if (confirming && (key === 'n' || key === 'escape')) { e.preventDefault(); answer(false); }
 });
 
+// ---------- My safety rules ----------
+
+const rulesEls = {
+  list: $('rules-list'), read: $('rules-read'), form: $('rules-form'), message: $('rules-message'),
+  limit: $('rule-limit'),
+};
+let rules = null;
+
+function showRules(r) {
+  rules = r;
+  rulesEls.list.replaceChildren(...r.summary.map((t) => Object.assign(document.createElement('li'), { textContent: t })));
+  rulesEls.limit.value = r.settings.perPaymentLimit;
+  // David may have set an in-between number: tick the level it belongs to
+  [...rulesEls.form.riskThreshold].forEach((x) => { x.checked = careName(Number(x.value)) === careName(r.settings.riskThreshold); });
+  rulesEls.form.askForNewPayees.checked = r.settings.askForNewPayees;
+}
+
+async function loadRules() {
+  try { showRules(await api('/api/settings')); } catch { /* keep the page usable */ }
+}
+
+// David may have changed them since the page opened: fetch fresh rules when Grace opens the form.
+$('rules-change').addEventListener('toggle', (e) => { if (e.target.open) loadRules(); });
+
+rulesEls.read.addEventListener('click', async () => {
+  await loadRules();
+  if (rules) say(`Here are your safety rules. ${rules.summary.join(' ')}`);
+});
+
+rulesEls.form.addEventListener('submit', async (e) => {
+  e.preventDefault();
+  if (!rules) return;
+  const f = rulesEls.form;
+  // Only send what changed, so an unchanged value is never treated as "loosening".
+  const wanted = {
+    perPaymentLimit: Number(f.perPaymentLimit.value),
+    riskThreshold: Number(f.riskThreshold.value),
+    askForNewPayees: f.askForNewPayees.checked,
+  };
+  const changes = Object.fromEntries(Object.entries(wanted).filter(([k, v]) => {
+    if (k === 'riskThreshold') return careName(v) !== careName(rules.settings.riskThreshold);
+    return v !== rules.settings[k];
+  }));
+  rulesEls.message.className = 'rules-message';
+  if (!Object.keys(changes).length) {
+    rulesEls.message.textContent = 'Nothing changed.';
+    return say('Nothing changed. Your rules are the same.');
+  }
+  try {
+    const r = await api('/api/settings', changes);
+    showRules(r);
+    rulesEls.message.classList.add('ok');
+    rulesEls.message.textContent = 'Saved. Your rules are updated.';
+    await say(r.spoken);
+  } catch (err) {
+    showRules(rules);                 // put the form back to the rules that are really in place
+    rulesEls.message.classList.add('bad');
+    rulesEls.message.textContent = err.message;
+    await say(err.message);
+  }
+});
+
+function careName(threshold) {
+  return threshold <= 25 ? 'very' : threshold <= 45 ? 'careful' : 'relaxed';
+}
+
 // ---------- Start ----------
 
 (async function init() {
@@ -346,6 +469,8 @@ document.addEventListener('keydown', (e) => {
     status = await api('/api/status');
   } catch { /* server not reachable: keep defaults */ }
   els.hello.textContent = `Hello, ${status.userName}`;
+  document.querySelectorAll('.helper-name').forEach((n) => { n.textContent = status.helperName; });
+  loadRules();
   els.banner.classList.toggle('hidden', status.paypalLinked);
 
   const link = new URLSearchParams(location.search).get('link');

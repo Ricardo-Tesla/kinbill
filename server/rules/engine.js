@@ -91,3 +91,51 @@ export function decide({ amount, riskScore, triggers = [], knownPayee = false, s
 export function describeTriggers(triggers = []) {
   return triggers.map((t) => TRIGGER_WORDS[String(t).toUpperCase()] || String(t).toLowerCase());
 }
+
+// ---------- Changing the rules safely ----------
+//
+// Grace may make her rules STRICTER herself at any time.
+// Making them LOOSER (a higher limit, a more relaxed scam check, not asking about new people)
+// needs her helper. Scammers often tell victims to "switch off" protections over the phone.
+
+// How careful the scam check is. A LOWER threshold asks the helper more often (stricter).
+export const CARE_LEVELS = [
+  { key: 'very', label: 'Very careful', riskThreshold: 25 },
+  { key: 'careful', label: 'Careful', riskThreshold: 40 },
+  { key: 'relaxed', label: 'Relaxed', riskThreshold: 60 },
+];
+
+export function careLabel(riskThreshold) {
+  if (riskThreshold <= 25) return 'Very careful';
+  if (riskThreshold <= 45) return 'Careful';
+  return 'Relaxed';
+}
+
+/**
+ * Which proposed changes would make the rules looser than now?
+ * @returns {string[]} names of the loosened settings (empty = same or stricter)
+ */
+export function loosenedSettings(current, proposed) {
+  const c = { ...DEFAULT_SETTINGS, ...current };
+  const loosened = [];
+  if ('perPaymentLimit' in proposed && Number(proposed.perPaymentLimit) > c.perPaymentLimit) loosened.push('perPaymentLimit');
+  if ('riskThreshold' in proposed && Number(proposed.riskThreshold) > c.riskThreshold) loosened.push('riskThreshold');
+  if ('askForNewPayees' in proposed && c.askForNewPayees && !proposed.askForNewPayees) loosened.push('askForNewPayees');
+  return loosened;
+}
+
+/** Grace's rules as short, plain sentences (shown and read aloud on her screen). */
+export function describeRules(settings, { helperName = 'David', holdTime = '48 hours' } = {}) {
+  const s = { ...DEFAULT_SETTINGS, ...settings };
+  const dollars = Number.isInteger(s.perPaymentLimit) ? s.perPaymentLimit : s.perPaymentLimit.toFixed(2);
+  return [
+    `Payments over ${dollars} dollars wait for ${helperName}.`,
+    s.askForNewPayees
+      ? `The first payment to someone new waits for ${helperName}.`
+      : 'Payments to people in your contacts can go straight away, even the first time.',
+    `Scam check: ${careLabel(s.riskThreshold)}. If a payment looks like it could be a trick, it waits for ${helperName}.`,
+    `Gift cards, cryptocurrency, secrets, or someone telling you what to say: always waits for ${helperName}.`,
+    `People who are not in your contacts: always wait for ${helperName}.`,
+    `If ${helperName} does not answer within ${holdTime}, the payment is cancelled and no money moves.`,
+  ];
+}

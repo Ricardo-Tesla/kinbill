@@ -79,6 +79,18 @@ test('David\'s routes need the helper PIN', async () => {
   }, { helperPin: '2468' });
 });
 
+test('fonts, theme switch and icon are served from our own server', async () => {
+  await withServer(fakeService, async (base) => {
+    for (const path of [
+      '/vendor/fonts/atkinson-hyperlegible-next-latin-wght-normal.woff2',
+      '/vendor/fonts-mono/atkinson-hyperlegible-mono-latin-700-normal.woff2',
+      '/theme.js', '/favicon.svg',
+    ]) {
+      assert.equal((await fetch(`${base}${path}`)).status, 200, path);
+    }
+  });
+});
+
 test('AG Grid is served from our own server', async () => {
   await withServer(fakeService, async (base) => {
     const res = await fetch(`${base}/vendor/ag-grid/ag-grid-community.min.js`);

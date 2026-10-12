@@ -32,8 +32,10 @@ const WHAT = {
   APPROVED: 'Approved', REJECTED: 'Rejected', EXPIRED: 'Auto-cancelled', CONTACT_ADDED: 'Contact added',
   FAILED: 'Failed', PAYOUT_FAILED: 'Payout failed', CAPTURE_FAILED: 'Capture failed', EXPIRE_RETRY: 'Retrying cancel',
   CONFIRMED_VOIDED: 'PayPal confirmed cancel', CONFIRMED_CAPTURED: 'PayPal confirmed capture', WEBHOOK: 'PayPal message',
+  RULES_CHANGED: 'Rules changed', RULES_BLOCKED: 'Tried to loosen rules',
 };
 let knownHeldIds = new Set();
+let heldLoaded = false;   // after the first load, new arrivals are animated and announced
 let pollTimer = null;
 
 // ---------- small helpers ----------
@@ -96,16 +98,24 @@ els.pinForm.addEventListener('submit', async (e) => {
 // ---------- Waiting payments (cards) ----------
 
 function renderHeld(held) {
-  els.heldList.replaceChildren(...held.map(heldCard));
+  const cards = held.map(heldCard);
+  // A payment that just arrived slides in (not on the first load)
+  held.forEach((p, i) => { if (heldLoaded && !knownHeldIds.has(p.id)) cards[i].classList.add('enter'); });
+  els.heldList.replaceChildren(...cards);
   els.nothing.classList.toggle('hidden', held.length > 0);
+  const before = Number(els.count.textContent) || 0;
   els.count.textContent = held.length ? String(held.length) : '';
+  if (held.length > before && heldLoaded) {
+    els.count.classList.remove('bump'); void els.count.offsetWidth; els.count.classList.add('bump');
+  }
   document.title = held.length ? `(${held.length}) Kin-bill: helper` : 'Kin-bill: helper';
 
   const newOnes = held.filter((p) => !knownHeldIds.has(p.id));
-  if (knownHeldIds.size && newOnes.length) {
+  if (heldLoaded && newOnes.length) {
     announce(`New payment waiting: ${newOnes[0].helperPayeeName || newOnes[0].payeeName}, ${money(newOnes[0].amount)}.`);
   }
   knownHeldIds = new Set(held.map((p) => p.id));
+  heldLoaded = true;
 }
 
 function heldCard(p) {
@@ -191,7 +201,25 @@ function heldCard(p) {
 
 // AG Grid's advice for screen readers: keep rows and columns in the page in reading order,
 // and render all columns (not only the visible ones). Taller rows are easier to read and click.
-const GRID_A11Y = { ensureDomOrder: true, suppressColumnVirtualisation: true, rowHeight: 44, enableCellTextSelection: true };
+const GRID_A11Y = { ensureDomOrder: true, suppressColumnVirtualisation: true, rowHeight: 44, enableCellTextSelection: true, domLayout: 'autoHeight' };
+
+// AG Grid's Quartz theme in Kin-bill colours, with a light and a dark version.
+// theme.js sets data-ag-theme-mode on the page, so the tables switch with the rest of the screen.
+function gridTheme() {
+  const quartz = window.agGrid?.themeQuartz;
+  if (!quartz) return undefined;
+  const shared = { fontFamily: 'inherit', fontSize: 16, headerFontWeight: 700, wrapperBorderRadius: 14, spacing: 7 };
+  return quartz
+    .withParams({ ...shared, browserColorScheme: 'light', backgroundColor: '#FFFFFF', foregroundColor: '#001C64',
+      headerBackgroundColor: '#0070BA', headerTextColor: '#FFFFFF', borderColor: '#CBD2D6', accentColor: '#0070BA',
+      oddRowBackgroundColor: '#F8FAFC', chromeBackgroundColor: '#F5F7FA' })
+    .withParams({ ...shared, browserColorScheme: 'dark', backgroundColor: '#0E1C47', foregroundColor: '#F3F6FC',
+      headerBackgroundColor: '#0070BA', headerTextColor: '#FFFFFF', borderColor: '#273A70', accentColor: '#009CDE',
+      oddRowBackgroundColor: '#112152', chromeBackgroundColor: '#0E1C47' }, 'dark');
+}
+const THEME = gridTheme();
+const STATUS_CLASS = (x) => (/Waiting|Paying|confirming/.test(x.value) ? 'st-wait'
+  : /Rejected|Auto|Failed|failed|Cancelled/.test(x.value) ? 'st-bad' : 'st-ok');
 
 function historyRows(history) {
   return history.map((p) => ({
@@ -217,8 +245,7 @@ function renderHistory(history) {
           { field: 'when', headerName: 'When', width: 140 },
           { field: 'payee', headerName: 'To', flex: 1, minWidth: 150 },
           { field: 'amount', headerName: 'Amount', width: 110, valueFormatter: (x) => money(x.value) },
-          { field: 'status', headerName: 'Status', flex: 1, minWidth: 170,
-            cellStyle: (x) => ({ fontWeight: 700, color: /Waiting|Failed/.test(x.value) ? '#7a4100' : /Rejected|Auto/.test(x.value) ? '#8f1111' : '#0a5c25' }) },
+          { field: 'status', headerName: 'Status', flex: 1, minWidth: 170, cellClass: STATUS_CLASS },
           { field: 'risk', headerName: 'Risk', width: 90 },
           { field: 'route', headerName: 'Route', width: 160 },
           { field: 'decidedBy', headerName: 'Decided by', width: 120 },
@@ -227,6 +254,7 @@ function renderHistory(history) {
         ],
         defaultColDef: { sortable: true, filter: true, resizable: true },
         ...GRID_A11Y,
+        ...(THEME ? { theme: THEME } : {}),
         pagination: true,
         paginationPageSize: 20,
         paginationPageSizeSelector: [10, 20, 50],
@@ -281,6 +309,7 @@ function renderActivity(entries) {
     ],
     defaultColDef: { sortable: true, filter: true, resizable: true },
     ...GRID_A11Y,
+    ...(THEME ? { theme: THEME } : {}),
     pagination: true,
     paginationPageSize: 20,
     paginationPageSizeSelector: [20, 50, 100],
@@ -291,11 +320,68 @@ function renderActivity(entries) {
 // ---------- Loading and live updates ----------
 
 async function refresh() {
-  const [{ held, history }, activity] = await Promise.all([api('/api/helper/overview'), api('/api/helper/activity')]);
+  const [{ held, history }, activity, rules] = await Promise.all([
+    api('/api/helper/overview'), api('/api/helper/activity'), api('/api/settings'),
+  ]);
   renderHeld(held);
   renderHistory(history);
   renderActivity(activity);
+  renderRules(rules, activity);
 }
+
+// ---------- Grace's safety rules ----------
+
+const rulesForm = $('rules-form');
+const rulesMessage = $('rules-message');
+const rulesAlert = $('rules-alert');
+let rulesShown = null;
+let lastBlockedId = null;
+
+function renderRules(r, activity = []) {
+  const s = r.settings;
+  // Don't overwrite the form while David is typing in it.
+  if (!rulesForm.contains(document.activeElement) && JSON.stringify(s) !== JSON.stringify(rulesShown)) {
+    rulesForm.perPaymentLimit.value = s.perPaymentLimit;
+    const select = rulesForm.riskThreshold;
+    if (![...select.options].some((o) => Number(o.value) === s.riskThreshold)) {
+      select.add(new Option(`${s.riskThreshold}: custom`, String(s.riskThreshold)));
+    }
+    select.value = String(s.riskThreshold);
+    rulesForm.askForNewPayees.checked = s.askForNewPayees;
+    rulesShown = s;
+  }
+  // Warn David if Grace tried to loosen her rules in the last 24 hours (a scam warning sign).
+  const blocked = activity.find((a) => a.action === 'RULES_BLOCKED' && Date.now() - new Date(a.at) < 24 * 3600e3);
+  rulesAlert.classList.toggle('hidden', !blocked);
+  if (blocked) {
+    rulesAlert.textContent = `Warning: ${when(blocked.at)}: ${blocked.detail} Someone may be pressuring her. Consider calling her.`;
+    if (lastBlockedId !== null && blocked.id !== lastBlockedId) announce('Warning: Grace tried to loosen her safety rules.');
+    lastBlockedId = blocked.id;
+  } else if (lastBlockedId === null) {
+    lastBlockedId = 0;
+  }
+}
+
+rulesForm.addEventListener('submit', async (e) => {
+  e.preventDefault();
+  rulesMessage.className = 'rules-message';
+  rulesMessage.textContent = '';
+  const changes = {
+    perPaymentLimit: Number(rulesForm.perPaymentLimit.value),
+    riskThreshold: Number(rulesForm.riskThreshold.value),
+    askForNewPayees: rulesForm.askForNewPayees.checked,
+  };
+  try {
+    const r = await api('/api/helper/settings', changes);
+    rulesShown = null;
+    rulesMessage.classList.add('ok');
+    rulesMessage.textContent = r.changed ? 'Saved. Grace\'s rules are updated.' : 'Nothing changed.';
+    queueRefresh();
+  } catch (err) {
+    rulesMessage.classList.add('bad');
+    rulesMessage.textContent = err.message;
+  }
+});
 
 let refreshQueued = false;
 function queueRefresh() {

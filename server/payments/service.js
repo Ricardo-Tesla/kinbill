@@ -25,9 +25,9 @@
 import { EventEmitter } from 'node:events';
 import * as paypalOrders from '../paypal/orders.js';
 import { analyzePaymentRequest } from '../ai/riskAgent.js';
-import { decide } from '../rules/engine.js';
+import { decide, loosenedSettings, describeRules, careLabel } from '../rules/engine.js';
 import {
-  getSettings, findContactByName, isKnownContact, getContact, recordPaymentToContact,
+  getSettings, saveSettings, cleanSettings, findContactByName, isKnownContact, getContact, recordPaymentToContact,
   getVaultId, setAccountValue, insertPayment, getPayment, updatePayment, listPayments,
   addContact, findContactByEmail, addAudit, listAudit, listExpiredHolds, findPaymentBy, markWebhookEvent,
 } from '../db.js';
@@ -468,6 +468,76 @@ export function createPaymentService({
     return { linked: true };
   }
 
+  // ---- Grace's safety rules ----
+  // Grace may make them stricter; only the helper may loosen them (see rules/engine.js).
+
+  function rulesView() {
+    const settings = getSettings(db);
+    return {
+      settings,
+      careLevel: careLabel(settings.riskThreshold),
+      summary: describeRules(settings, { helperName, holdTime: duration(holdTimeoutSeconds) }),
+    };
+  }
+
+  function getRules() {
+    return rulesView();
+  }
+
+  function describeChange(before, after) {
+    const parts = [];
+    if (before.perPaymentLimit !== after.perPaymentLimit) parts.push(`limit $${before.perPaymentLimit} -> $${after.perPaymentLimit}`);
+    if (before.riskThreshold !== after.riskThreshold) {
+      parts.push(`scam check ${careLabel(before.riskThreshold)} (${before.riskThreshold}) -> ${careLabel(after.riskThreshold)} (${after.riskThreshold})`);
+    }
+    if (before.askForNewPayees !== after.askForNewPayees) parts.push(`ask about new people: ${before.askForNewPayees ? 'yes' : 'no'} -> ${after.askForNewPayees ? 'yes' : 'no'}`);
+    return parts.join('; ');
+  }
+
+  /**
+   * @param {object} changes  { perPaymentLimit?, riskThreshold?, askForNewPayees? }
+   * @param {object} opts     { by: 'grace' | 'helper' }
+   */
+  function updateRules(changes, { by = 'grace' } = {}) {
+    let clean;
+    try {
+      clean = cleanSettings(changes);
+    } catch (err) {
+      throw new PaymentError(`That setting is not valid: ${err.message}.`, 'BAD_SETTING', 400);
+    }
+    if (!Object.keys(clean).length) throw new PaymentError('Nothing to change.', 'BAD_SETTING', 400);
+
+    const before = getSettings(db);
+    const actor = by === 'helper' ? 'david' : 'grace';
+    const tried = describeChange(before, { ...before, ...clean });
+
+    if (actor === 'grace') {
+      const loosened = loosenedSettings(before, clean);
+      if (loosened.length) {
+        // Tell the helper: someone may be talking Grace into switching protection off.
+        addAudit(db, { actor: 'grace', action: 'RULES_BLOCKED', detail: `${userName} tried to loosen her rules (${tried}). Only ${helperName} can do that.` });
+        events.emit('change', { rules: true });
+        throw new PaymentError(
+          `Only ${helperName} can make your rules less strict. This keeps you safe if someone asks you to change them. Nothing was changed.`,
+          'NEEDS_HELPER', 403,
+        );
+      }
+    }
+
+    const after = saveSettings(db, clean);
+    const what = describeChange(before, after);
+    if (what) {
+      addAudit(db, { actor, action: 'RULES_CHANGED', detail: `${actor === 'david' ? helperName : userName} changed the rules: ${what}` });
+      events.emit('change', { rules: true });
+    }
+    const view = rulesView();
+    return {
+      ...view,
+      changed: Boolean(what),
+      spoken: what ? `Done. Your rules are updated. ${view.summary[0]}` : 'Nothing changed. Your rules are the same.',
+    };
+  }
+
   // Tests use this to wait for background payout checks.
   async function idle() {
     while (background.size) await Promise.all([...background]);
@@ -476,6 +546,6 @@ export function createPaymentService({
   return {
     createRequest, confirm, cancel, get, approve, reject, helperOverview, activity,
     expireDueHolds, startTimers, resumePayoutChecks, handleWebhookEvent,
-    startLink, finishLink, idle, events,
+    startLink, finishLink, idle, events, getRules, updateRules,
   };
 }

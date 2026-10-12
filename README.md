@@ -22,6 +22,8 @@ Built for the PayPal "Build What's Next with PayPal and AI" hackathon. Sandbox o
 | 7. David's helper screen: held payments, reasons, approve / reject, live updates, AG Grid history | Done: open /david.html |
 | 8. Safety timer (auto-cancel), activity log, PayPal webhooks (verified) | Done (webhooks switch on after deploy) |
 | 9. Accessibility: keyboard, screen readers, contrast, text size, voice speed | Done: `npm test` includes accessibility checks |
+| 9b. Grace's safety rules: she can make them stricter, only David can loosen them | Done |
+| 9c. Visual design "Family Check": PayPal-aligned navy, light / dark / auto themes | Done |
 | 10 | Coming |
 
 ## Requirements
@@ -112,6 +114,30 @@ Kin-bill is built for people with low vision, so accessibility is the product, n
 - Checked with **axe-core** in Chromium (0 violations on all pages, WCAG 2.2 AA rules) and by `test/a11y.test.js`
   (labels, button names, skip link, contrast ratios).
 
+## Grace's safety rules
+
+- **Grace's screen > My safety rules**: her rules in plain words, **Read my rules aloud**, and **Make my rules safer**
+  (lower the limit, a more careful scam check, ask David about new people).
+- **Only David can loosen rules** (raise the limit, relax the scam check), on his PIN screen.
+  If Grace tries, nothing changes, she hears why, and David sees a warning: someone may be pressuring her.
+  Scammers often tell people to "switch off" protections; this makes that impossible from Grace's side.
+- Always on, whatever the settings: gift cards, crypto, secrecy, coaching, and people not in her contacts wait for David.
+- API: `GET /api/settings`, `POST /api/settings` (stricter only), `POST /api/helper/settings` (PIN). Every change is in the activity log.
+
+## Visual design: "Family Check"
+
+- **PayPal-aligned colours**: one consistent PayPal blue (#0070BA) for every button, the talk button, selected
+  options, table headers and links, with PayPal's deep navy as the text colour and pill-shaped buttons.
+  Green, amber and red are kept only for meaning (sent, waiting, stopped).
+  Kin-bill keeps its own name and logo and says it is not made or endorsed by PayPal.
+- **Signature pieces**: a round talk button that pulses only while listening; the confirm step laid out like a cheque
+  (Pay to / Amount / You said); a status pill on every result (Sent, Waiting for David, Not sent), never colour alone;
+  David's decisions are signed ("Checked by David").
+- **Themes**: Auto (follows the device), Light, Dark: the **Screen** buttons on every page, remembered per device.
+  David's AG Grid tables switch too (Quartz theme with light and dark params).
+- **Type**: Atkinson Hyperlegible Next and Mono (Braille Institute, designed for low vision), served from our own server.
+- Contrast is tested for both themes in `test/a11y.test.js`; axe-core finds 0 issues on every page in light and dark.
+
 ## Project layout
 
 ```
@@ -125,7 +151,7 @@ server/
   db.js             SQLite (built into Node): settings, contacts, PayPal link, payments
   ai/               AI scam checker + keyword safety floor
   payments/service.js  the payment flow: read back, pay now or hold for David
-public/             Grace's screen (grace.*), David's screen (david.*), styles, landing page
+public/             landing page, Grace's screen (grace.*), David's screen (david.*), styles.css, theme.js (light/dark/auto)
 scripts/            check-paypal.js, spike-paypal.js
 test/               node:test unit tests with a fake fetch
 ```

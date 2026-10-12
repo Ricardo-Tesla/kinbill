@@ -88,16 +88,24 @@ export function getSettings(db) {
   return { ...DEFAULT_SETTINGS, ...(row ? JSON.parse(row.data) : {}) };
 }
 
-export function saveSettings(db, changes) {
+// Keeps only known settings and checks the values. Throws a clear error if a value is wrong.
+export function cleanSettings(changes = {}) {
   const allowed = Object.keys(DEFAULT_SETTINGS);
   const clean = Object.fromEntries(Object.entries(changes).filter(([k]) => allowed.includes(k)));
-  if ('perPaymentLimit' in clean) clean.perPaymentLimit = positiveNumber(clean.perPaymentLimit, 'perPaymentLimit');
+  if ('perPaymentLimit' in clean) {
+    clean.perPaymentLimit = Math.round(positiveNumber(clean.perPaymentLimit, 'perPaymentLimit') * 100) / 100;
+    if (clean.perPaymentLimit > 10000) throw new Error('perPaymentLimit must be 10000 or less');
+  }
   if ('riskThreshold' in clean) {
     clean.riskThreshold = positiveNumber(clean.riskThreshold, 'riskThreshold');
     if (clean.riskThreshold > 100) throw new Error('riskThreshold must be between 1 and 100');
   }
-  if ('askForNewPayees' in clean) clean.askForNewPayees = Boolean(clean.askForNewPayees);
+  if ('askForNewPayees' in clean) clean.askForNewPayees = clean.askForNewPayees === true || clean.askForNewPayees === 'true';
+  return clean;
+}
 
+export function saveSettings(db, changes) {
+  const clean = cleanSettings(changes);
   const next = { ...getSettings(db), ...clean };
   db.prepare('INSERT INTO settings (id, data) VALUES (1, ?) ON CONFLICT(id) DO UPDATE SET data = excluded.data')
     .run(JSON.stringify(next));

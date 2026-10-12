@@ -87,7 +87,14 @@ The LLM never decides to move money. Treat everything Grace says as untrusted in
 7. David helper view: live pending holds, reasons, Approve/Reject -> capture/void. DONE: public/david.*, PIN (HELPER_PIN), SSE /api/helper/events, AG Grid served at /vendor/ag-grid
 8. Auto-void timer + webhooks + audit log. DONE: service.expireDueHolds/startTimers, audit_log, POST /api/paypal/webhook (verified)
 9. Accessibility pass (keyboard, screen reader labels, contrast, large text). DONE: skip links, Y/N/R keys, text size + voice speed, Say it again, test/a11y.test.js, axe-core 0 violations
+9b. Safety rules screen. DONE: Grace can only tighten (POST /api/settings), David can change any (POST /api/helper/settings); blocked loosening -> RULES_BLOCKED audit + warning on David's screen
+9c. Visual design "Family Check". DONE: tokens in public/styles.css (light :root + identical dark blocks), public/theme.js (Auto/Light/Dark, data-theme + data-ag-theme-mode), fonts self-hosted from @fontsource packages at /vendor/fonts*
 10. Deploy to Render, README with setup steps, LICENSE (MIT), demo seed data.
+
+## Design rules
+- Colours only through the tokens in public/styles.css; every token is defined for light and again (identically) in both dark blocks. test/a11y.test.js checks contrast for both.
+- One brand blue: PayPal blue #0070BA (--primary = --paypal) for buttons, talk button, selected toggles, table headers and links; dark mode links use PayPal sky #009CDE. No pale blue washes. Navy #001C64 is the text ink. Never use PayPal's logo in Kin-bill's own branding; never imply PayPal endorsement.
+- Every status shows words + shape, not colour alone. Buttons are pills. Keep Grace's 24 px base and big targets.
 
 ## Working rules for Claude Code
 - Use `kinbill` (no hyphen) for package, repo and code names; "Kin-bill" is the display name.

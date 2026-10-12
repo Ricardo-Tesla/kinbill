@@ -14,6 +14,9 @@ const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
 const PUBLIC_DIR = path.join(ROOT, 'public');
 // AG Grid (sponsor table library) is served from our own server, no CDN needed.
 const AG_GRID_DIR = path.join(ROOT, 'node_modules', 'ag-grid-community', 'dist');
+// Atkinson Hyperlegible fonts (Braille Institute, made for low vision), also served by us.
+const FONT_DIR = path.join(ROOT, 'node_modules', '@fontsource-variable', 'atkinson-hyperlegible-next', 'files');
+const MONO_FONT_DIR = path.join(ROOT, 'node_modules', '@fontsource', 'atkinson-hyperlegible-mono', 'files');
 
 export function createApp({
   db = openDb(':memory:'),
@@ -26,6 +29,8 @@ export function createApp({
   app.use(express.json({ limit: '20kb' }));
   app.use(express.static(PUBLIC_DIR));
   app.use('/vendor/ag-grid', express.static(AG_GRID_DIR));
+  app.use('/vendor/fonts', express.static(FONT_DIR, { maxAge: '30d', immutable: true }));
+  app.use('/vendor/fonts-mono', express.static(MONO_FONT_DIR, { maxAge: '30d', immutable: true }));
 
   // Wraps async routes so errors become clear JSON answers.
   const handle = (fn) => async (req, res) => {
@@ -80,6 +85,11 @@ export function createApp({
     }
   });
 
+  // ---- Grace's safety rules: she can make them stricter, only David can loosen them ----
+
+  app.get('/api/settings', handle(() => service.getRules()));
+  app.post('/api/settings', handle((req) => service.updateRules(req.body || {}, { by: 'grace' })));
+
   // ---- Payments ----
 
   app.post('/api/requests', handle((req) => service.createRequest(req.body?.text)));
@@ -104,6 +114,7 @@ export function createApp({
     handle((req) => service.approve(Number(req.params.id), { email: req.body?.email })));
   app.post('/api/helper/payments/:id/reject', requirePin,
     handle((req) => service.reject(Number(req.params.id))));
+  app.post('/api/helper/settings', requirePin, handle((req) => service.updateRules(req.body || {}, { by: 'helper' })));
 
   // Live updates: David's screen keeps this open and refreshes when a payment changes.
   app.get('/api/helper/events', requirePin, (req, res) => {

@@ -1,43 +1,65 @@
-/* David's helper screen: same calm look as Grace's, a bit denser (he is not the low-vision user). */
+/* David's helper screen: the same Family Check look as Grace's, denser (he is not the low-vision user). */
 
-.helper { --helper-size: 18px; }
 html:has(body.helper) { font-size: 18px; }
+html.text-lg:has(body.helper), html.text-xl:has(body.helper) { font-size: 18px; }
 
 .wrap.wide { max-width: 1100px; }
-.tag { font-size: 0.8rem; font-weight: 700; color: #fff; background: var(--primary); padding: 2px 10px; border-radius: 999px; vertical-align: middle; }
-.h-small { font-size: 1.6rem; margin: 28px 0 8px; }
-.count { display: inline-block; min-width: 1.6em; padding: 0 8px; border-radius: 999px; background: var(--warn); color: #fff; font-size: 1.1rem; text-align: center; }
+.top-right { display: flex; align-items: center; gap: 12px 20px; flex-wrap: wrap; }
+.h-small { font-size: 1.5rem; margin: 28px 0 8px; }
+.card .h-small, .rules .h-small { margin-top: 4px; }
+.count {
+  display: inline-grid; place-items: center; min-width: 1.7em; height: 1.7em; padding: 0 8px; margin-left: 6px;
+  border-radius: 999px; background: var(--held); color: var(--on-held); font-size: 1rem; vertical-align: middle;
+}
 .count:empty { display: none; }
 
-.card.held { border-color: var(--warn); background: #fffaf0; }
+/* Buttons are a little smaller here */
+.helper button, .helper .button { min-height: 56px; font-size: 1rem; padding: 10px 22px; }
+.helper .group button { min-height: 44px; font-size: .8rem; padding: 4px 12px; }
+
+/* ---------- Held payment card ---------- */
+.card.held { border: 2px solid var(--held); }
+.doc-head { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; margin: 0 0 14px; padding-bottom: 12px; border-bottom: 1px dashed var(--line); }
+.held-status { margin: 0; background: var(--held); border-color: var(--held); color: var(--on-held); font-size: .78rem; }
 .held-top { display: flex; justify-content: space-between; gap: 16px; align-items: flex-start; flex-wrap: wrap; }
-.card .held-amount { font-size: 2.2rem; font-weight: 800; margin: 0; line-height: 1.2; }
-.card .held-payee { font-size: 1.2rem; margin: 0; }
+.card .held-amount { font-family: var(--mono); font-variant-numeric: tabular-nums; font-size: 2.4rem; font-weight: 700; margin: 0; line-height: 1.1; letter-spacing: -.02em; }
+.card .held-payee { font-size: 1.15rem; font-weight: 700; margin: 4px 0 0; }
 .card .held-said { font-style: italic; color: var(--muted); font-size: 1.05rem; }
-.card .held-ai { font-size: 1.1rem; }
+.card .held-ai { font-size: 1.05rem; }
 
-.risk { text-align: center; margin: 0; padding: 8px 14px; border-radius: 14px; border: 3px solid var(--bad); background: var(--bad-bg); }
-.risk.medium { border-color: var(--warn); background: var(--warn-bg); }
-.risk.low { border-color: var(--ok); background: var(--ok-bg); }
-.risk-score { display: block; font-size: 1.8rem; font-weight: 800; line-height: 1; }
-.risk-label { font-size: 0.8rem; font-weight: 700; }
+/* Risk score: a stamped box, colour plus the words and the number */
+.risk {
+  margin: 0; display: grid; justify-items: center; gap: 0; padding: 8px 14px 10px; min-width: 104px;
+  border: 3px solid var(--bad); color: var(--bad); border-radius: 8px; background: var(--surface);
+}
+.risk.medium { border-color: var(--warn); color: var(--warn); }
+.risk.low { border-color: var(--ok); color: var(--ok); }
+.risk-label { font-family: var(--mono); font-size: .65rem; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; }
+.risk-score { font-family: var(--mono); font-size: 2rem; font-weight: 700; line-height: 1; }
+.risk-of { font-family: var(--mono); font-size: .75rem; font-weight: 700; }
 
-.held button { min-height: 72px; font-size: 1.15rem; }
-.approve { background: var(--ok); color: #fff; border-color: var(--ok); }
-.reject { background: #fff; color: var(--bad); border-color: var(--bad); }
+.held .row { margin-top: 8px; }
+.approve { background: var(--ok); color: var(--on-ok); border-color: var(--ok); }
+.approve:hover { background: var(--ok); filter: brightness(1.08); }
+.reject { color: var(--bad); border-color: var(--bad); }
 
 .email-label { display: block; font-weight: 700; margin: 12px 0; }
-.email-input { display: block; width: 100%; margin-top: 8px; min-height: 56px; font: inherit; padding: 10px 14px; border: 3px solid var(--border); border-radius: 12px; }
+.email-input { display: block; width: 100%; margin-top: 8px; min-height: 56px; }
+.email-input[aria-invalid="true"] { border-color: var(--bad); border-width: 3px; }
 
 .error { color: var(--bad); font-weight: 700; margin: 8px 0 0; }
 .error:empty { display: none; }
-.empty { font-size: 1.15rem; padding: 20px; border: 2px dashed #b5b5b5; border-radius: var(--radius); }
+.empty { font-size: 1.1rem; padding: 20px; border: 2px dashed var(--line); border-radius: var(--radius); color: var(--muted); }
 
-.grid { height: 420px; width: 100%; margin-top: 8px; }
-.simple-table { width: 100%; border-collapse: collapse; font-size: 0.95rem; }
-.simple-table th, .simple-table td { border-bottom: 1px solid #ccc; padding: 8px; text-align: left; }
+/* ---------- Rules ---------- */
+.helper .rules { margin-top: 28px; }
+.helper .rules-form input[type="number"] { min-height: 56px; font-size: 1.1rem; }
+.select { min-height: 56px; max-width: 420px; }
 
-/* Feature 9 */
-.held .why-title { font-size: 1.15rem; }
-.email-input[aria-invalid="true"] { border-color: var(--bad); border-width: 4px; }
-.grid { --ag-font-size: 16px; }
+/* ---------- Tables (AG Grid; theme set in david.js) ---------- */
+.grid { width: 100%; margin-top: 8px; }   /* grows with its rows (domLayout autoHeight) */
+.st-ok { color: var(--ok); font-weight: 700; }
+.st-wait { color: var(--warn); font-weight: 700; }
+.st-bad { color: var(--bad); font-weight: 700; }
+.simple-table { width: 100%; border-collapse: collapse; font-size: .95rem; }
+.simple-table th, .simple-table td { border-bottom: 1px solid var(--line); padding: 8px; text-align: left; }
