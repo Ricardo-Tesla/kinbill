@@ -11,7 +11,7 @@ html:has(body.helper) { font-size: 18px; }
 
 .card.held { border-color: var(--warn); background: #fffaf0; }
 .held-top { display: flex; justify-content: space-between; gap: 16px; align-items: flex-start; flex-wrap: wrap; }
-.card .held-amount { font-size: 2.2rem; font-weight: 800; margin: 0; }
+.card .held-amount { font-size: 2.2rem; font-weight: 800; margin: 0; line-height: 1.2; }
 .card .held-payee { font-size: 1.2rem; margin: 0; }
 .card .held-said { font-style: italic; color: var(--muted); font-size: 1.05rem; }
 .card .held-ai { font-size: 1.1rem; }
@@ -36,3 +36,8 @@ html:has(body.helper) { font-size: 18px; }
 .grid { height: 420px; width: 100%; margin-top: 8px; }
 .simple-table { width: 100%; border-collapse: collapse; font-size: 0.95rem; }
 .simple-table th, .simple-table td { border-bottom: 1px solid #ccc; padding: 8px; text-align: left; }
+
+/* Feature 9 */
+.held .why-title { font-size: 1.15rem; }
+.email-input[aria-invalid="true"] { border-color: var(--bad); border-width: 4px; }
+.grid { --ag-font-size: 16px; }

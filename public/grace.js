@@ -18,6 +18,8 @@ let status = { userName: 'Grace', helperName: 'David', paypalLinked: false };
 let current = null;        // the payment being confirmed
 let shownId = null;        // the payment shown in the result box
 let busy = false;
+let lastSpoken = '';       // for "Say it again"
+let voiceRate = 0.9;       // Grace can choose "Slower"
 
 // ---------- Speaking and listening ----------
 
@@ -27,13 +29,14 @@ function announce(text) {
 }
 
 function say(text) {
+  lastSpoken = text;
   announce(text);
   return new Promise((resolve) => {
     if (!('speechSynthesis' in window)) return resolve();
     window.speechSynthesis.cancel();
     const u = new SpeechSynthesisUtterance(text);
     u.lang = 'en-US';
-    u.rate = 0.9;            // a little slower, easier to follow
+    u.rate = voiceRate;      // a little slower than normal; "Slower" makes it slower still
     u.onend = resolve;
     u.onerror = resolve;
     window.speechSynthesis.speak(u);
@@ -78,6 +81,9 @@ async function api(path, body) {
 
 function show(section) {
   for (const s of [els.ask, els.confirm, els.result]) s.classList.toggle('hidden', s !== section);
+  // The browser tab title says where Grace is (screen readers read it when she switches tabs).
+  const step = section === els.confirm ? 'Is this right?' : section === els.result ? els.resultTitle.textContent : 'Who would you like to pay?';
+  document.title = `${step} - Kin-bill`;
 }
 
 function money(n) {
@@ -92,7 +98,7 @@ function showResult(kind, title, text, detail = '', reasons = []) {
   els.resultReasons.replaceChildren(...reasons.map((r) => Object.assign(document.createElement('li'), { textContent: r })));
   els.resultWhy.classList.toggle('hidden', !reasons.length);
   show(els.result);
-  els.again.focus();
+  els.resultTitle.focus();   // screen readers start reading at the result
 }
 
 function reset() {
@@ -111,6 +117,7 @@ async function handleRequest(text) {
   if (busy || !text) return;
   busy = true;
   setListening(false, 'Checking...');
+  announce('Checking, one moment.');
   try {
     const r = await api('/api/requests', { text });
     if (r.needsRetry) {
@@ -275,6 +282,61 @@ els.linkButton.addEventListener('click', async () => {
     els.linkButton.disabled = false;
     await say(`Sorry, could not connect PayPal: ${err.message}`);
   }
+});
+
+// ---------- Comfort settings (remembered on this device) ----------
+
+function remember(key, value) { try { localStorage.setItem(key, value); } catch { /* private mode: fine */ } }
+function recall(key) { try { return localStorage.getItem(key); } catch { return null; } }
+
+function pressOnly(buttons, chosen) {
+  buttons.forEach((b) => b.setAttribute('aria-pressed', String(b === chosen)));
+}
+
+function setTextSize(cls) {
+  document.documentElement.classList.remove('text-lg', 'text-xl');
+  if (cls) document.documentElement.classList.add(cls);
+  const buttons = [...document.querySelectorAll('[data-size]')];
+  pressOnly(buttons, buttons.find((b) => b.dataset.size === cls) || buttons[0]);
+  remember('kinbill-text-size', cls);
+}
+
+function setVoiceRate(rate) {
+  voiceRate = Number(rate) || 0.9;
+  const buttons = [...document.querySelectorAll('[data-rate]')];
+  pressOnly(buttons, buttons.find((b) => Number(b.dataset.rate) === voiceRate) || buttons[0]);
+  remember('kinbill-voice-rate', String(voiceRate));
+}
+
+document.querySelectorAll('[data-size]').forEach((b) => b.addEventListener('click', () => {
+  setTextSize(b.dataset.size);
+  announce(b.dataset.size === 'text-xl' ? 'Biggest text.' : b.dataset.size === 'text-lg' ? 'Bigger text.' : 'Normal text size.');
+}));
+document.querySelectorAll('[data-rate]').forEach((b) => b.addEventListener('click', () => {
+  setVoiceRate(b.dataset.rate);
+  say(voiceRate < 0.9 ? 'I will speak more slowly.' : 'I will speak at normal speed.');
+}));
+
+setTextSize(recall('kinbill-text-size') || '');
+setVoiceRate(recall('kinbill-voice-rate') || 0.9);
+
+// ---------- "Say it again" and keyboard shortcuts ----------
+
+function repeat() {
+  if (lastSpoken) say(lastSpoken);
+}
+document.querySelectorAll('[data-repeat]').forEach((b) => b.addEventListener('click', repeat));
+
+// Y = yes, N or Escape = no (only while "Is this right?" is showing), R = say it again.
+// Ignored while typing in a box, so typing a name with a Y or N is safe.
+document.addEventListener('keydown', (e) => {
+  if (e.ctrlKey || e.altKey || e.metaKey) return;
+  if (e.target.closest('input, textarea, select, [contenteditable]')) return;
+  const key = e.key.toLowerCase();
+  const confirming = !els.confirm.classList.contains('hidden');
+  if (key === 'r') { e.preventDefault(); repeat(); }
+  else if (confirming && key === 'y') { e.preventDefault(); answer(true); }
+  else if (confirming && (key === 'n' || key === 'escape')) { e.preventDefault(); answer(false); }
 });
 
 // ---------- Start ----------

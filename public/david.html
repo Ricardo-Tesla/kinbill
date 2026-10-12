@@ -8,25 +8,27 @@
   <link rel="stylesheet" href="/david.css">
 </head>
 <body class="helper">
+  <a class="skip-link" href="#main">Skip to main content</a>
   <div class="wrap wide">
     <header>
       <p class="brand">Kin-bill <span class="tag">Helper</span></p>
       <p class="hello" id="hello">Hello</p>
     </header>
 
+    <main id="main" tabindex="-1">
     <!-- PIN gate -->
     <section id="pin-gate" class="card hidden" aria-labelledby="pin-title">
       <h1 id="pin-title" class="h-small">Enter your helper PIN</h1>
       <p>Only the person Grace trusts can see and approve her payments.</p>
       <form id="pin-form" class="typed-form">
-        <label class="sr-only" for="pin">Helper PIN</label>
-        <input id="pin" type="password" inputmode="numeric" autocomplete="current-password" placeholder="PIN">
+        <label class="field-label" for="pin">Helper PIN</label>
+        <input id="pin" type="password" inputmode="numeric" autocomplete="current-password" aria-describedby="pin-error">
         <button class="primary" type="submit">Open</button>
       </form>
       <p id="pin-error" class="error" role="alert"></p>
     </section>
 
-    <main id="main" class="hidden">
+    <div id="dashboard" class="hidden">
       <section aria-labelledby="waiting-title">
         <h1 id="waiting-title" class="h-small">Waiting for you <span id="waiting-count" class="count"></span></h1>
         <p id="live-state" class="note">Connecting for live updates...</p>
@@ -36,14 +38,15 @@
 
       <section aria-labelledby="history-title">
         <h2 id="history-title" class="h-small">All payments</h2>
-        <div id="history-grid" class="grid" role="region" aria-label="All of Grace's payments"></div>
+        <div id="history-grid" class="grid"></div>
       </section>
 
       <section aria-labelledby="activity-title">
         <h2 id="activity-title" class="h-small">Activity log</h2>
         <p class="note">Every step, in order: who did what and when. Nothing is ever deleted.</p>
-        <div id="activity-grid" class="grid" role="region" aria-label="Activity log"></div>
+        <div id="activity-grid" class="grid"></div>
       </section>
+    </div>
     </main>
 
     <div id="live" class="sr-only" aria-live="polite" aria-atomic="true"></div>
@@ -53,10 +56,10 @@
     <article class="card held">
       <div class="held-top">
         <div>
-          <p class="held-amount"></p>
+          <h2 class="held-amount"></h2>
           <p class="held-payee"></p>
         </div>
-        <p class="risk"><span class="risk-score"></span><span class="risk-label">scam risk</span></p>
+        <p class="risk"><span class="risk-score"></span><span class="sr-only"> out of 100</span> <span class="risk-label">scam risk</span></p>
       </div>
       <p class="held-said"></p>
       <p class="held-ai"></p>

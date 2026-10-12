@@ -21,7 +21,8 @@ Built for the PayPal "Build What's Next with PayPal and AI" hackathon. Sandbox o
 | 6. Grace's voice screen: speak, hear it read back, yes/no, real sandbox payment | Done: `npm run dev`, open /grace.html |
 | 7. David's helper screen: held payments, reasons, approve / reject, live updates, AG Grid history | Done: open /david.html |
 | 8. Safety timer (auto-cancel), activity log, PayPal webhooks (verified) | Done (webhooks switch on after deploy) |
-| 9–10 | Coming |
+| 9. Accessibility: keyboard, screen readers, contrast, text size, voice speed | Done: `npm test` includes accessibility checks |
+| 10 | Coming |
 
 ## Requirements
 
@@ -94,6 +95,22 @@ Open **http://localhost:3000/david.html** and enter the `HELPER_PIN` from `.env`
 - **PayPal webhooks** at `POST /api/paypal/webhook`: every event's signature is verified with PayPal
   (`/v1/notifications/verify-webhook-signature`) before use; repeats are ignored. Needs a public URL
   and `PAYPAL_WEBHOOK_ID`, so it is switched on after deploying (feature 10).
+
+## Feature 9: accessibility
+
+Kin-bill is built for people with low vision, so accessibility is the product, not an extra.
+
+- **Keyboard only**: every control works with Tab / Enter / Space. A **Skip to main content** link comes first.
+  On "Is this right?" press **Y** for yes, **N** or **Esc** for no, **R** to hear it again (ignored while typing).
+- **Screen readers**: everything Kin-bill says is also announced (live regions); focus moves to each new step;
+  every button and field has a name; David's held cards are named "$40.00 to ..." and his buttons say who they pay.
+- **Seeing**: 24 px base text, big targets (88 px buttons), thick yellow focus ring, AAA contrast (7:1+) for main text,
+  works in Windows High Contrast mode, no zoom blocking, no motion.
+- **Grace's comfort settings** (remembered on her device): text size **A / A+ / A++** and voice speed **Normal / Slower**,
+  plus a **Say it again** button.
+- **David's tables (AG Grid)**: rows and columns kept in reading order for screen readers, taller rows.
+- Checked with **axe-core** in Chromium (0 violations on all pages, WCAG 2.2 AA rules) and by `test/a11y.test.js`
+  (labels, button names, skip link, contrast ratios).
 
 ## Project layout
 

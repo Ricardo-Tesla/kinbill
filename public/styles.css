@@ -20,6 +20,9 @@
 * { box-sizing: border-box; }
 
 html { font-size: 24px; }
+/* Grace can make everything bigger (A+ buttons); every size uses rem, so the whole page grows. */
+html.text-lg { font-size: 28px; }
+html.text-xl { font-size: 32px; }
 
 body {
   margin: 0;
@@ -104,3 +107,48 @@ summary { cursor: pointer; font-weight: 700; padding: 12px 0; }
 .why-title { font-size: 1.3rem; margin: 16px 0 8px; }
 .why-list { margin: 0 0 16px; padding-left: 1.2em; font-size: 1.25rem; }
 .why-list li { margin-bottom: 8px; }
+
+/* ---------- Accessibility (feature 9) ---------- */
+
+/* "Skip to main content": first thing a keyboard user reaches; visible only when focused. */
+.skip-link {
+  position: absolute; left: 12px; top: -200px; z-index: 100;
+  background: var(--primary); color: var(--primary-text);
+  padding: 14px 22px; border-radius: 12px; font-weight: 800; text-decoration: none;
+}
+.skip-link:focus { top: 12px; }
+
+/* Grace's comfort settings: text size and voice speed */
+.settings { display: flex; flex-wrap: wrap; gap: 10px 24px; align-items: center; margin: 16px 0 0; padding: 0; border: 0; }
+.settings .group { display: flex; gap: 8px; align-items: center; }
+.settings .group-label { font-size: 0.85rem; font-weight: 700; color: var(--muted); }
+.settings button { min-height: 56px; min-width: 64px; padding: 8px 14px; font-size: 0.9rem; border-width: 2px; }
+.settings button[aria-pressed="true"] { background: var(--text); color: #fff; border-color: var(--text); }
+
+/* A visible label above inputs (placeholders alone disappear and are hard to read) */
+.field-label { display: block; width: 100%; font-weight: 700; margin-bottom: 4px; }
+
+/* "Say it again" button */
+.repeat { min-height: 64px; font-size: 1.05rem; margin-top: 8px; }
+
+/* Keyboard hints */
+.keys { font-size: 0.85rem; color: var(--muted); margin: 12px 0 0; }
+kbd {
+  display: inline-block; min-width: 1.6em; padding: 0 6px; text-align: center;
+  border: 2px solid var(--text); border-radius: 6px; font: inherit; font-weight: 800; background: #fff;
+}
+
+/* Headings that receive focus from code should not show a big focus box for mouse users */
+[tabindex="-1"]:focus:not(:focus-visible) { outline: none; }
+
+/* Windows High Contrast / forced colours: keep borders and focus visible */
+@media (forced-colors: active) {
+  button, .button, .card, .banner, .risk, .count, .tag { border: 3px solid CanvasText; }
+  :focus-visible { outline: 6px solid Highlight; }
+  .speak.listening { outline: 6px dashed Highlight; }
+}
+
+/* People who ask their device for less motion get none */
+@media (prefers-reduced-motion: reduce) {
+  * { scroll-behavior: auto !important; transition: none !important; animation: none !important; }
+}

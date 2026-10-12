@@ -7,11 +7,27 @@
   <link rel="stylesheet" href="/styles.css">
 </head>
 <body>
+  <a class="skip-link" href="#main">Skip to main content</a>
   <div class="wrap">
     <header>
       <p class="brand">Kin-bill</p>
       <p class="hello" id="hello">Hello</p>
     </header>
+
+    <!-- Comfort settings, remembered on this device -->
+    <section class="settings" aria-label="Comfort settings">
+      <div class="group" role="group" aria-labelledby="size-label">
+        <span class="group-label" id="size-label">Text size</span>
+        <button type="button" data-size="" aria-pressed="true">A</button>
+        <button type="button" data-size="text-lg" aria-pressed="false" aria-label="A plus, bigger">A+</button>
+        <button type="button" data-size="text-xl" aria-pressed="false" aria-label="A plus plus, biggest">A++</button>
+      </div>
+      <div class="group" role="group" aria-labelledby="voice-label">
+        <span class="group-label" id="voice-label">Voice speed</span>
+        <button type="button" data-rate="0.9" aria-pressed="true">Normal</button>
+        <button type="button" data-rate="0.7" aria-pressed="false">Slower</button>
+      </div>
+    </section>
 
     <!-- Shown only until Grace's PayPal is connected -->
     <section id="link-banner" class="banner hidden" aria-labelledby="link-title">
@@ -20,7 +36,7 @@
       <button id="link-button" class="primary" type="button">Connect PayPal</button>
     </section>
 
-    <main>
+    <main id="main" tabindex="-1">
       <!-- Step 1: speak or type -->
       <section id="ask">
         <h1 class="prompt" id="prompt">Who would you like to pay?</h1>
@@ -33,7 +49,7 @@
         <details id="type-instead">
           <summary>Type instead</summary>
           <form id="typed-form" class="typed-form">
-            <label class="sr-only" for="typed">Who to pay and how much</label>
+            <label class="field-label" for="typed">Who to pay and how much</label>
             <input id="typed" name="typed" autocomplete="off" placeholder="Pay Joe 80 dollars">
             <button class="primary" type="submit">Send</button>
           </form>
@@ -42,25 +58,30 @@
 
       <!-- Step 2: read back and confirm -->
       <section id="confirm" class="card hidden" aria-labelledby="confirm-title">
-        <h2 id="confirm-title">Is this right?</h2>
+        <h2 id="confirm-title" tabindex="-1">Is this right?</h2>
         <p class="big-amount" id="confirm-text"></p>
         <p class="said" id="confirm-said"></p>
         <div class="row">
           <button id="yes" class="yes" type="button">Yes, send it</button>
           <button id="no" class="no" type="button">No, cancel</button>
         </div>
+        <button class="repeat" type="button" data-repeat>Say it again</button>
+        <p class="keys" id="confirm-keys">Keyboard: <kbd>Y</kbd> yes, <kbd>N</kbd> no, <kbd>R</kbd> say it again.</p>
       </section>
 
       <!-- Step 3: result -->
       <section id="result" class="card hidden" aria-labelledby="result-title">
-        <h2 id="result-title"></h2>
+        <h2 id="result-title" tabindex="-1"></h2>
         <p id="result-text"></p>
         <div id="result-why" class="hidden">
           <h3 class="why-title">Why I paused it</h3>
           <ul id="result-reasons" class="why-list"></ul>
         </div>
         <p class="note" id="result-detail"></p>
-        <button id="again" class="primary" type="button">Make another payment</button>
+        <div class="row">
+          <button id="again" class="primary" type="button">Make another payment</button>
+          <button class="repeat" type="button" data-repeat>Say it again</button>
+        </div>
       </section>
 
       <!-- Demo helpers for judges and browsers without a microphone -->

@@ -4,7 +4,7 @@
 const $ = (id) => document.getElementById(id);
 const els = {
   hello: $('hello'), gate: $('pin-gate'), pinForm: $('pin-form'), pin: $('pin'), pinError: $('pin-error'),
-  main: $('main'), heldList: $('held-list'), nothing: $('nothing-waiting'), count: $('waiting-count'),
+  main: $('dashboard'), heldList: $('held-list'), nothing: $('nothing-waiting'), count: $('waiting-count'),
   liveState: $('live-state'), grid: $('history-grid'), live: $('live'), template: $('held-template'),
   activityGrid: $('activity-grid'),
 };
@@ -119,7 +119,6 @@ function heldCard(p) {
   const risk = q('.risk');
   q('.risk-score').textContent = p.riskScore ?? '?';
   risk.classList.add(p.riskScore >= 70 ? 'high' : p.riskScore >= 40 ? 'medium' : 'low');
-  risk.setAttribute('aria-label', `Scam risk ${p.riskScore} out of 100`);
   q('.held-reasons').replaceChildren(...(p.reasons || []).map((r) => Object.assign(document.createElement('li'), { textContent: r })));
   q('.held-meta').textContent = `Asked ${when(p.createdAt)}. Checked by: ${p.aiSource || 'unknown'}. ${timeLeft(p.holdExpiresAt)}`;
 
@@ -129,17 +128,32 @@ function heldCard(p) {
   const approve = q('.approve');
   const reject = q('.reject');
   const error = q('.held-error');
-  approve.textContent = p.inContacts ? `Approve and pay ${money(p.amount)}` : 'Add to contacts and pay';
-  approve.setAttribute('aria-label', `Approve paying ${who} ${money(p.amount)}`);
-  reject.setAttribute('aria-label', `Reject paying ${who} ${money(p.amount)}`);
+  const approveText = p.inContacts ? `Approve and pay ${money(p.amount)}` : 'Add to contacts and pay';
+  approve.textContent = approveText;
+  // Screen-reader names start with the visible words (so voice control "click Approve" works)
+  // and add who it is for, because there can be several cards.
+  approve.setAttribute('aria-label', `${approveText} to ${who}`);
+  reject.setAttribute('aria-label', `Reject, keep the money: ${money(p.amount)} to ${who}`);
+  // Give the card a name: "$40.00 to an unknown person"
+  const headingId = `held-${p.id}`;
+  q('.held-amount').id = headingId;
+  q('.held-payee').id = `${headingId}-payee`;
+  node.setAttribute('aria-labelledby', `${headingId} ${headingId}-payee`);
+  const errorId = `held-error-${p.id}`;
+  error.id = errorId;
+  email.setAttribute('aria-describedby', errorId);
 
   approve.addEventListener('click', async () => {
     error.textContent = '';
-    if (!p.inContacts && !email.value.trim()) {
-      error.textContent = 'Please enter their PayPal email first, or reject the payment.';
+    if (!p.inContacts && (!email.value.trim() || !email.checkValidity())) {
+      error.textContent = email.value.trim()
+        ? 'That does not look like an email address. Please check it.'
+        : 'Please enter their PayPal email first, or reject the payment.';
+      email.setAttribute('aria-invalid', 'true');
       email.focus();
       return;
     }
+    email.removeAttribute('aria-invalid');
     if (!window.confirm(`Pay ${money(p.amount)} to ${who}? This sends the money.`)) return;
     approve.disabled = reject.disabled = true;
     approve.textContent = 'Paying...';
@@ -150,7 +164,7 @@ function heldCard(p) {
     } catch (err) {
       error.textContent = err.message;
       approve.disabled = reject.disabled = false;
-      approve.textContent = p.inContacts ? `Approve and pay ${money(p.amount)}` : 'Add to contacts and pay';
+      approve.textContent = approveText;
     }
   });
 
@@ -174,6 +188,10 @@ function heldCard(p) {
 }
 
 // ---------- History table (AG Grid, with a plain-table fallback) ----------
+
+// AG Grid's advice for screen readers: keep rows and columns in the page in reading order,
+// and render all columns (not only the visible ones). Taller rows are easier to read and click.
+const GRID_A11Y = { ensureDomOrder: true, suppressColumnVirtualisation: true, rowHeight: 44, enableCellTextSelection: true };
 
 function historyRows(history) {
   return history.map((p) => ({
@@ -208,6 +226,7 @@ function renderHistory(history) {
           { field: 'said', headerName: 'What Grace said', flex: 2, minWidth: 260, tooltipField: 'said' },
         ],
         defaultColDef: { sortable: true, filter: true, resizable: true },
+        ...GRID_A11Y,
         pagination: true,
         paginationPageSize: 20,
         paginationPageSizeSelector: [10, 20, 50],
@@ -261,6 +280,7 @@ function renderActivity(entries) {
       { field: 'detail', headerName: 'Details', flex: 1, minWidth: 300, tooltipField: 'detail' },
     ],
     defaultColDef: { sortable: true, filter: true, resizable: true },
+    ...GRID_A11Y,
     pagination: true,
     paginationPageSize: 20,
     paginationPageSizeSelector: [20, 50, 100],

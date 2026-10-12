@@ -86,7 +86,7 @@ The LLM never decides to move money. Treat everything Grace says as untrusted in
 6. Grace voice UI: listen -> read back -> confirm -> result spoken. DONE: public/grace.*, server/payments/service.js
 7. David helper view: live pending holds, reasons, Approve/Reject -> capture/void. DONE: public/david.*, PIN (HELPER_PIN), SSE /api/helper/events, AG Grid served at /vendor/ag-grid
 8. Auto-void timer + webhooks + audit log. DONE: service.expireDueHolds/startTimers, audit_log, POST /api/paypal/webhook (verified)
-9. Accessibility pass (keyboard, screen reader labels, contrast, large text).
+9. Accessibility pass (keyboard, screen reader labels, contrast, large text). DONE: skip links, Y/N/R keys, text size + voice speed, Say it again, test/a11y.test.js, axe-core 0 violations
 10. Deploy to Render, README with setup steps, LICENSE (MIT), demo seed data.
 
 ## Working rules for Claude Code
