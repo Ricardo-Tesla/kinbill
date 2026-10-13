@@ -249,11 +249,38 @@ async function answer(yes) {
   }
 }
 
+// Browsers slow down timers in a tab that is not showing, and Grace may not be looking.
+// pause() also wakes up as soon as the tab is shown again, and sayWhenSeen() keeps a message
+// until Grace is back on this screen, then says it.
+function pause(ms) {
+  return new Promise((resolve) => {
+    const done = () => { clearTimeout(t); document.removeEventListener('visibilitychange', onShow); resolve(); };
+    const onShow = () => { if (!document.hidden) done(); };
+    const t = setTimeout(done, ms);
+    document.addEventListener('visibilitychange', onShow);
+  });
+}
+
+let waitingToSay = null;
+function sayWhenSeen(text) {
+  if (!document.hidden) return say(text);
+  waitingToSay = text;
+  announce(text);
+  return Promise.resolve();
+}
+document.addEventListener('visibilitychange', () => {
+  if (!document.hidden && waitingToSay) {
+    const text = waitingToSay;
+    waitingToSay = null;
+    setTimeout(() => say(text), 400);
+  }
+});
+
 // While a payment is paused, checks every few seconds for David's decision and tells Grace.
 async function watchHeld(id) {
   const stillShown = () => shownId === id && !els.result.classList.contains('hidden');
   for (let i = 0; i < 720 && stillShown(); i++) {   // up to about an hour on screen
-    await new Promise((r) => setTimeout(r, 5000));
+    await pause(5000);
     let p;
     try { p = await api(`/api/requests/${id}`); } catch { continue; }
     if (p.status === 'HELD') continue;
@@ -262,16 +289,16 @@ async function watchHeld(id) {
     if (p.status === 'PAYING' || p.status === 'PAID') {
       const msg = `${status.helperName} approved your payment to ${p.payeeName}. ${money(p.amount)} is on its way.`;
       showResult('ok', `${status.helperName} approved it`, msg, 'It usually arrives within a minute or two.', [], { label: 'Approved and sent', signoff: signed, amount: p.amount });
-      await say(msg);
+      await sayWhenSeen(msg);
       watchUntilPaid(id);
     } else if (p.status === 'REJECTED') {
       const msg = `${status.helperName} decided not to send this payment to ${p.payeeName}. No money was sent.`;
       showResult('bad', 'Not sent', msg, `If you are unsure, you can call ${status.helperName}.`, [], { label: `Stopped by ${status.helperName}`, signoff: signed });
-      await say(msg);
+      await sayWhenSeen(msg);
     } else if (p.status === 'EXPIRED') {
       const msg = 'No one approved this payment in time, so it was cancelled. No money was sent.';
       showResult('bad', 'Cancelled', msg, '', [], { label: 'Cancelled: no answer in time' });
-      await say(msg);
+      await sayWhenSeen(msg);
     }
     return;
   }
@@ -280,14 +307,14 @@ async function watchHeld(id) {
 // Checks every few seconds until the payout has arrived, then tells Grace.
 async function watchUntilPaid(id) {
   for (let i = 0; i < 40; i++) {
-    await new Promise((r) => setTimeout(r, 5000));
+    await pause(5000);
     let p;
     try { p = await api(`/api/requests/${id}`); } catch { continue; }
     if (p.status === 'PAID') {
       const msg = `Good news. ${p.payeeName} has received the ${money(p.amount)}.`;
       els.resultDetail.textContent = msg;
       // Say it out loud, unless Grace has already started another payment.
-      if (!els.result.classList.contains('hidden') && !busy) await say(msg);
+      if (!els.result.classList.contains('hidden') && !busy) await sayWhenSeen(msg);
       else announce(msg);
       return;
     }
