@@ -1,0 +1,48 @@
+# Render Blueprint: puts Kin-bill online as one free web service.
+# Render reads this file when you choose New > Blueprint and pick this repo.
+# Secrets marked "sync: false" are typed into Render's dashboard once; they are never stored in the repo.
+
+services:
+  - type: web
+    name: kinbill
+    runtime: node
+    plan: free
+    buildCommand: npm ci
+    startCommand: npm start
+    healthCheckPath: /api/health
+    autoDeployTrigger: commit
+    envVars:
+      - key: NODE_VERSION
+        value: "24"
+      # PayPal sandbox app (same values as in your .env)
+      - key: PAYPAL_CLIENT_ID
+        sync: false
+      - key: PAYPAL_CLIENT_SECRET
+        sync: false
+      - key: PAYPAL_API_BASE
+        value: https://api-m.sandbox.paypal.com
+      - key: PAYEE_JOE_EMAIL
+        sync: false
+      # Grace's saved PayPal link, so judges don't have to connect PayPal first
+      # (Render's free plan wipes the database when the app sleeps).
+      - key: KINBILL_VAULT_ID
+        sync: false
+      # AI scam check
+      - key: AI_PROVIDER
+        value: gemini
+      - key: GEMINI_API_KEY
+        sync: false
+      # David's helper PIN (judges get it from the README / Devpost page)
+      - key: HELPER_PIN
+        value: "2468"
+      # 10 minutes: long enough for a judge to approve, short enough to see the safety timer work
+      - key: HOLD_TIMEOUT_SECONDS
+        value: "600"
+      - key: SWEEP_INTERVAL_SECONDS
+        value: "15"
+      # Example payments in David's tables on a fresh start
+      - key: KINBILL_DEMO
+        value: "1"
+      # Filled in after the first deploy, once the PayPal webhook exists
+      - key: PAYPAL_WEBHOOK_ID
+        sync: false

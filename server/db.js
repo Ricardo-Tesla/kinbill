@@ -184,6 +184,45 @@ export function importLegacyVault(db, file = '.kinbill-vault.json') {
   return false;
 }
 
+// Restores Grace's saved PayPal link from KINBILL_VAULT_ID (used online, where the database is not kept).
+export function importVaultFromEnv(db, vaultId) {
+  if (!vaultId || getVaultId(db)) return false;
+  setAccountValue(db, 'vault_id', vaultId);
+  return true;
+}
+
+// ---- Demo history (KINBILL_DEMO=1): example payments so the judges see full tables straight away ----
+
+export function seedDemoHistory(db, { userName = 'Grace', helperName = 'David' } = {}) {
+  if (db.prepare('SELECT COUNT(*) AS n FROM payments').get().n > 0) return false;
+  const hoursAgo = (h) => new Date(Date.now() - h * 3600e3).toISOString();
+  const examples = [
+    { at: 50, said: 'Pay my plumber Joe 80 dollars for fixing the sink', payee_name: 'Joe the plumber', amount: 80, risk_score: 5,
+      decision: 'PAY_NOW', status: 'PAID', reasons: [], log: [['grace', 'ASKED', 'Pay Joe the plumber $80'], ['ai', 'CHECKED', 'Risk 5/100: a known contact, normal amount'],
+        ['kinbill', 'RULES_PAY_NOW', 'Known contact, under the limit, low risk'], ['paypal', 'DELIVERED', 'Joe the plumber received $80']] },
+    { at: 26, said: 'A man from PayPal called, my account is locked and I must send 600 dollars today to unlock it', payee_name: 'PayPal security',
+      amount: 600, risk_score: 95, decision: 'ASK_HELPER', status: 'REJECTED', decided_by: 'helper',
+      reasons: ['someone who may be pretending to be a company, official or family member', 'pressure to pay quickly', 'not in Grace\'s contacts'],
+      log: [['grace', 'ASKED', 'Pay "PayPal security" $600'], ['ai', 'CHECKED', 'Risk 95/100: impersonation and urgency'],
+        ['kinbill', 'HELD', `$600 held; waiting for ${helperName}`], ['david', 'REJECTED', `${helperName} rejected it; the hold was cancelled, no money moved`]] },
+    { at: 5, said: 'Pay the corner pharmacy 25 dollars', payee_name: 'Corner pharmacy', amount: 25, risk_score: 30, decision: 'ASK_HELPER',
+      status: 'EXPIRED', decided_by: 'timer', reasons: [`not in ${userName}'s contacts`],
+      log: [['grace', 'ASKED', 'Pay Corner pharmacy $25'], ['kinbill', 'HELD', `$25 held; waiting for ${helperName}`],
+        ['timer', 'EXPIRED', 'Nobody decided in time, so the hold was cancelled; no money moved']] },
+  ];
+  for (const e of examples) {
+    const p = insertPayment(db, { ...e, ai_source: 'demo', triggers: [] });
+    const when = hoursAgo(e.at);
+    db.prepare('UPDATE payments SET created_at = ?, updated_at = ?, decided_by = ?, decided_at = ? WHERE id = ?')
+      .run(when, when, e.decided_by ?? null, e.decided_by ? when : null, p.id);
+    e.log.forEach(([actor, action, detail], i) => {
+      db.prepare('INSERT INTO audit_log (at, payment_id, actor, action, detail) VALUES (?, ?, ?, ?, ?)')
+        .run(new Date(Date.parse(when) + i * 60e3).toISOString(), p.id, actor, action, `${detail} (example)`);
+    });
+  }
+  return true;
+}
+
 // ---- Payments ----
 
 const JSON_FIELDS = ['triggers', 'reasons', 'grace_reasons'];

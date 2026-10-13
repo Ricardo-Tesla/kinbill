@@ -103,3 +103,18 @@ test('demo contacts are added once', () => {
   seedDemoContacts(db, 'joe@example.com');
   assert.deepEqual(listContacts(db).map((c) => [c.name, c.times_paid]), [['Joe the plumber', 1], ['Sam the gardener', 0]]);
 });
+
+test('online: the saved PayPal link can come from KINBILL_VAULT_ID, and demo mode adds example history once', async () => {
+  const { importVaultFromEnv, getVaultId, seedDemoHistory, listPayments, listAudit } = await import('../server/db.js');
+  const db = openDb(':memory:');
+  assert.equal(importVaultFromEnv(db, ''), false);
+  assert.equal(importVaultFromEnv(db, 'vault-123'), true);
+  assert.equal(getVaultId(db), 'vault-123');
+  assert.equal(importVaultFromEnv(db, 'other'), false, 'an existing link is kept');
+
+  assert.equal(seedDemoHistory(db), true);
+  assert.equal(seedDemoHistory(db), false, 'only into an empty database');
+  const statuses = listPayments(db, { limit: 10 }).map((p) => p.status).sort();
+  assert.deepEqual(statuses, ['EXPIRED', 'PAID', 'REJECTED']);
+  assert.ok(listAudit(db).every((a) => a.detail.endsWith('(example)')));
+});

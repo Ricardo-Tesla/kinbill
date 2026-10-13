@@ -124,3 +124,22 @@ test('webhook route is off until PAYPAL_WEBHOOK_ID is set', async () => {
     assert.equal(res.status, 503);
   });
 });
+
+test('online safety: too many payment requests or wrong PINs from one visitor are slowed down', async () => {
+  const db = openDb(':memory:');
+  const app = createApp({ db, service: fakeService, helperPin: '2468', webhookId: '', limits: { requestsPerMinute: 3, pinFailuresPer15Min: 3 } });
+  const server = app.listen(0);
+  const base = `http://localhost:${server.address().port}`;
+  try {
+    const ask = () => fetch(`${base}/api/requests`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{"text":"Pay Joe 1"}' });
+    for (let i = 0; i < 3; i++) assert.equal((await ask()).status, 200);
+    const limited = await ask();
+    assert.equal(limited.status, 429);
+    assert.equal((await limited.json()).code, 'RATE_LIMITED');
+
+    const check = (pin) => fetch(`${base}/api/helper/check`, { headers: { 'x-helper-pin': pin } });
+    assert.equal((await check('')).status, 401, 'first visit without a PIN does not count');
+    for (let i = 0; i < 3; i++) assert.equal((await check('0000')).status, 401);
+    assert.equal((await check('2468')).status, 429, 'locked out even with the right PIN for a while');
+  } finally { server.close(); }
+});

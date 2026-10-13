@@ -91,8 +91,12 @@ async function tryPin(candidate) {
 els.pinForm.addEventListener('submit', async (e) => {
   e.preventDefault();
   els.pinError.textContent = '';
-  if (await tryPin(els.pin.value.trim())) start();
-  else els.pinError.textContent = 'That PIN is not right. Please try again.';
+  try {
+    if (await tryPin(els.pin.value.trim())) start();
+    else els.pinError.textContent = 'That PIN is not right. Please try again.';
+  } catch (err) {
+    els.pinError.textContent = err.message;  // e.g. too many wrong PINs: wait 15 minutes
+  }
 });
 
 // ---------- Waiting payments (cards) ----------
@@ -423,7 +427,7 @@ async function start() {
 
 (async function init() {
   const saved = storage((s) => s.getItem('kinbill-helper-pin')) || '';
-  if (await tryPin(saved)) return start();
+  if (await tryPin(saved).catch(() => false)) return start();
   els.gate.classList.remove('hidden');
   els.pin.focus();
 })();

@@ -2,12 +2,14 @@
 
 import { createApp } from './app.js';
 import { config, isPayPalConfigured } from './config.js';
-import { openDb, seedDemoContacts, importLegacyVault, getVaultId } from './db.js';
+import { openDb, seedDemoContacts, importLegacyVault, importVaultFromEnv, seedDemoHistory, getVaultId } from './db.js';
 import { createPaymentService } from './payments/service.js';
 
 const db = openDb();
 seedDemoContacts(db, config.payeeJoeEmail);
 if (importLegacyVault(db)) console.log('Reused the saved PayPal link from .kinbill-vault.json');
+if (importVaultFromEnv(db, config.vaultId)) console.log('Restored the saved PayPal link from KINBILL_VAULT_ID');
+if (config.demo && seedDemoHistory(db, config)) console.log('Demo mode: added example payments to the history');
 
 const service = createPaymentService({
   db,
@@ -22,7 +24,7 @@ const app = createApp({ db, service });
 // Safety timer: cancels holds nobody decided in time, and resumes payout checks after a restart.
 service.startTimers({ intervalMs: config.sweepIntervalSeconds * 1000 });
 
-app.listen(config.port, () => {
+app.listen(config.port, '0.0.0.0', () => {
   console.log(`Kin-bill is running:  ${config.publicUrl}`);
   console.log(`Grace's screen:       ${config.publicUrl}/grace.html`);
   if (!isPayPalConfigured()) console.warn('PayPal credentials are missing. Copy .env.example to .env and fill them in.');

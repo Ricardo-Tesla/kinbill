@@ -138,6 +138,25 @@ Kin-bill is built for people with low vision, so accessibility is the product, n
 - **Type**: Atkinson Hyperlegible Next and Mono (Braille Institute, designed for low vision), served from our own server.
 - Contrast is tested for both themes in `test/a11y.test.js`; axe-core finds 0 issues on every page in light and dark.
 
+## Feature 10: online on Render
+
+`render.yaml` describes the whole service (free plan, Node 24, health check `/api/health`).
+
+1. Push the repo to GitHub.
+2. On [render.com](https://render.com): **New > Blueprint**, pick this repo. Render reads `render.yaml`.
+3. Fill in the secrets it asks for: `PAYPAL_CLIENT_ID`, `PAYPAL_CLIENT_SECRET`, `PAYEE_JOE_EMAIL`,
+   `GEMINI_API_KEY`, and `KINBILL_VAULT_ID` (the `vaultId` from your local `.kinbill-vault.json`).
+4. After the first deploy, add a PayPal webhook pointing to `https://YOUR-APP.onrender.com/api/paypal/webhook`
+   and put its ID in `PAYPAL_WEBHOOK_ID`.
+
+Online behaviour:
+- Render's free plan sleeps after 15 minutes without visitors (the first visit then takes about a minute)
+  and starts with an empty database. Kin-bill restores Grace's PayPal link from `KINBILL_VAULT_ID`,
+  re-adds the demo contacts and, with `KINBILL_DEMO=1`, three example payments, so it is always ready to try.
+- Held payments are auto-cancelled after 10 minutes online (`HOLD_TIMEOUT_SECONDS=600`).
+- Basic protection for a public app: at most 20 payment requests per minute per visitor (protects the AI key),
+  and 10 wrong helper PINs lock that visitor out for 15 minutes.
+
 ## Project layout
 
 ```

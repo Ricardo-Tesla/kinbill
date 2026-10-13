@@ -9,6 +9,7 @@ import { getAccessToken } from './paypal/client.js';
 import { openDb, getVaultId, listContacts } from './db.js';
 import { createPaymentService, PaymentError } from './payments/service.js';
 import { verifyWebhook as verifyWithPayPal } from './paypal/webhooks.js';
+import { rateLimit, createCounter } from './rateLimit.js';
 
 const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
 const PUBLIC_DIR = path.join(ROOT, 'public');
@@ -24,8 +25,11 @@ export function createApp({
   helperPin = config.helperPin,
   webhookId = config.webhookId,
   verifyWebhook = verifyWithPayPal,
+  limits = { requestsPerMinute: 20, pinFailuresPer15Min: 10 },
 } = {}) {
   const app = express();
+  app.set('trust proxy', 1);          // behind Render's proxy: req.ip is the visitor's address
+  app.disable('x-powered-by');
   app.use(express.json({ limit: '20kb' }));
   app.use(express.static(PUBLIC_DIR));
   app.use('/vendor/ag-grid', express.static(AG_GRID_DIR));
@@ -92,16 +96,26 @@ export function createApp({
 
   // ---- Payments ----
 
-  app.post('/api/requests', handle((req) => service.createRequest(req.body?.text)));
+  // New payment requests use the AI, so one visitor can make at most a few per minute.
+  const requestLimit = rateLimit({ windowMs: 60e3, max: limits.requestsPerMinute,
+    message: 'That was a lot of requests. Please wait a minute and try again.' });
+  app.post('/api/requests', requestLimit, handle((req) => service.createRequest(req.body?.text)));
   app.post('/api/requests/:id/confirm', handle((req) => service.confirm(Number(req.params.id))));
   app.post('/api/requests/:id/cancel', handle((req) => service.cancel(Number(req.params.id))));
   app.get('/api/requests/:id', handle((req) => service.get(Number(req.params.id))));
 
   // ---- David's helper screen (PIN protected) ----
 
+  // Wrong PINs are counted per visitor: after too many, that visitor has to wait (stops PIN guessing).
+  const pinFailures = createCounter({ windowMs: 15 * 60e3, max: limits.pinFailuresPer15Min });
   const requirePin = (req, res, next) => {
+    if (helperPin && pinFailures.blocked(req.ip)) {
+      res.set('Retry-After', String(pinFailures.retryAfterSeconds(req.ip)));
+      return res.status(429).json({ error: 'Too many wrong PINs. Please wait 15 minutes and try again.', code: 'RATE_LIMITED' });
+    }
     const given = req.get('x-helper-pin') || req.query.pin || '';
     if (helperPin && given !== helperPin) {
+      if (given) pinFailures.hit(req.ip);   // an empty PIN (first visit) does not count
       return res.status(401).json({ error: 'Wrong or missing helper PIN.', code: 'PIN_REQUIRED' });
     }
     next();
