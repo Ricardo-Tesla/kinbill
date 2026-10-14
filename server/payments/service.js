@@ -34,13 +34,16 @@ import {
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
-// PayPal refuses a payout whose reference was used before (it blocks double payouts for 30 days).
+// Every request to PayPal for a payment carries a reference that must never be reused:
+// - payouts: PayPal refuses a reference it has seen before (blocks double payouts for 30 days)
+// - orders: PayPal-Request-Id makes PayPal repeat its OLD answer instead of doing new work
 // The payment number alone is not enough: a fresh database (e.g. after Render restarts) starts
 // counting at 1 again. Adding when the payment was created keeps it unique, and still the same
-// if Kin-bill retries the very same payment.
-export function payoutReference(p) {
-  return `kinbill-payout-${p.id}-${Date.parse(p.created_at).toString(36)}`;
+// if Kin-bill retries the very same payment (so a retry never charges twice).
+export function paymentRef(kind, p) {
+  return `kinbill-${kind}-${p.id}-${Date.parse(p.created_at).toString(36)}`;
 }
+export const payoutReference = (p) => paymentRef('payout', p);
 
 export class PaymentError extends Error {
   constructor(message, code, status = 400) {
@@ -197,7 +200,7 @@ export function createPaymentService({
     try {
       // Charge Grace's saved PayPal to Kin-bill. requestId makes a retry never charge twice.
       const { order } = await paypal.createOrder({
-        intent: 'CAPTURE', amount: p.amount, vaultId, requestId: `kinbill-pay-${p.id}`,
+        intent: 'CAPTURE', amount: p.amount, vaultId, requestId: paymentRef('pay', p),
         description: `Kin-bill: ${name}`.slice(0, 120),
       });
       ({ capture } = await paypal.settleVaultedOrder(order));
@@ -234,7 +237,7 @@ export function createPaymentService({
     try {
       // Hold the money in Kin-bill's own account; nothing reaches anyone yet.
       const { order } = await paypal.createOrder({
-        intent: 'AUTHORIZE', amount: p.amount, vaultId, requestId: `kinbill-hold-${p.id}`,
+        intent: 'AUTHORIZE', amount: p.amount, vaultId, requestId: paymentRef('hold', p),
         description: `Kin-bill hold for review: ${name}`.slice(0, 120),
       });
       const { authorization } = await paypal.settleVaultedOrder(order);

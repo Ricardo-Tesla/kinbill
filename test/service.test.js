@@ -68,7 +68,7 @@ test('normal payment to Joe: read back, then charged to Kin-bill and paid out to
   const order = paypal.calls.find(([n]) => n === 'createOrder')[1];
   assert.equal(order.intent, 'CAPTURE');
   assert.equal(order.vaultId, 'VAULT1');
-  assert.equal(order.requestId, `kinbill-pay-${r.payment.id}`);
+  assert.match(order.requestId, new RegExp(`^kinbill-pay-${r.payment.id}-[0-9a-z]+$`));
   assert.equal(order.payeeEmail, undefined, 'charged to Kin-bill, not directly to Joe');
   assert.equal(paypal.calls.find(([n]) => n === 'payout')[1].receiverEmail, 'joe@example.com');
 
@@ -305,4 +305,7 @@ test('payout reference stays unique after a fresh database reuses payment number
   assert.notEqual(first, afterRestart);
   assert.equal(first, payoutReference({ id: 4, created_at: '2026-10-13T10:00:00.000Z' }), 'same payment, same reference');
   assert.match(first, /^kinbill-payout-4-/);
+  const { paymentRef } = await import('../server/payments/service.js');
+  assert.notEqual(paymentRef('hold', { id: 4, created_at: '2026-10-13T10:00:00.000Z' }),
+    paymentRef('hold', { id: 4, created_at: '2026-10-14T16:27:00.000Z' }), 'PayPal-Request-Id for holds too');
 });
