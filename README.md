@@ -3,13 +3,83 @@
 **Your family has your back before money moves.**
 
 Kin-bill is a voice-first PayPal payment assistant for older and low-vision adults.
-An AI risk agent checks every payment for scam signs. Low-risk payments are paid at once;
-risky ones are only *authorized* (funds held, nothing moves) and wait for a trusted family
-member's approval. If they reject, or don't answer in time, the hold is voided.
+Grace says *"Pay my plumber Joe 80 dollars"*. An AI scam check and the rules she set with her son David decide:
+safe payments go straight through PayPal; risky ones are only **held** (nothing moves) until David approves.
+If David rejects, or nobody answers in time, the hold is cancelled and no money moves.
 
-Built for the PayPal "Build What's Next with PayPal and AI" hackathon. Sandbox only.
+Built for the PayPal **Build What's Next with PayPal and AI** hackathon. **PayPal sandbox only, no real money.**
 
-## Status
+## Try it now
+
+**Live demo: https://kinbill.onrender.com** (free hosting: the first visit after a quiet spell takes about a minute to wake up)
+
+| Screen | How |
+| --- | --- |
+| Grace (pays by voice) | **I want to pay someone**. Use Chrome or Edge for voice, or the example buttons / *Type instead* |
+| David (the helper) | **I'm the helper**, PIN **`2468`** |
+
+A 2-minute tour:
+
+1. **Safe payment:** on Grace's screen press **Pay Joe $80** and say or press **Yes**. It is paid through PayPal at once and Grace hears when Joe has the money.
+2. **New person:** press **Pay Sam $40 (new person)**, Yes. It is **held**. Open David's screen in a second window: the payment is waiting with the reasons. **Approve**, and Grace hears that David approved it.
+3. **Scam call:** press **"PayPal" scam call**. The AI flags impersonation and urgency; it is held, and David can **Reject**: the hold is cancelled, nothing moves.
+4. **Coached victim:** on Grace's screen open **My safety rules** and try to raise her limit to $500. It is refused, and David's screen shows a warning that someone may be pressuring her.
+5. Do nothing with a held payment: after 10 minutes online, the **safety timer** cancels it.
+6. Switch **Screen: Light / Dark / Auto**, text size **A++** and voice **Slower**: built for low vision.
+
+## How it works
+
+```mermaid
+flowchart LR
+  G["Grace speaks"] --> R["Read back, Grace says yes"]
+  R --> AI["AI scam check<br/>(Gemini, strict JSON)"]
+  AI --> RULES{"Grace's rules<br/>(plain code)"}
+  RULES -- "safe" --> PAY["PayPal Orders: CAPTURE<br/>then Payouts to Joe"]
+  RULES -- "risky / new / unknown" --> HOLD["PayPal Orders: AUTHORIZE<br/>money held, nothing moves"]
+  HOLD --> D{"David decides"}
+  D -- "approve" --> CAP["Capture + Payout"]
+  D -- "reject / no answer" --> VOID["Void: hold released"]
+```
+
+- **The AI never moves money.** It returns a risk score and reasons in a strict JSON schema; plain-code rules decide.
+  Gift cards, crypto, secrecy, impersonation and "someone told you what to say" always go to David. A keyword safety floor
+  means the AI can only *raise* the risk, never lower it, and Grace's words are treated as untrusted input.
+- **Grace links PayPal once** (vault). After that she never sees a PayPal screen; she just speaks.
+- **Every step is logged** (who did what, when) and shown to David in AG Grid tables, live via Server-Sent Events.
+
+### PayPal APIs used (sandbox)
+
+OAuth 2.0 client credentials · **Orders v2** (CAPTURE and AUTHORIZE, vaulted PayPal wallet, `PayPal-Request-Id` idempotency) ·
+**Payments v2** (capture and void authorizations) · **Payouts v1** · **Vault** (save PayPal during a $1 check that is released) ·
+**Webhooks** (payout items, authorization voided, capture completed), every event verified with `verify-webhook-signature`.
+
+### Built with
+
+Node.js 24 + Express, built-in SQLite (`node:sqlite`), plain HTML/CSS/JS (no build step), Web Speech API (voice in and out),
+Google Gemini (AI scam check; Claude optional), **AG Grid** (David's tables), **Render** (hosting, `render.yaml` Blueprint),
+Atkinson Hyperlegible fonts (Braille Institute). 111 automated tests (`npm test`), including accessibility and contrast checks;
+axe-core finds 0 issues on every page in light and dark.
+
+## Run it on your own computer
+
+Requirements: Node.js 22.9+ (24 recommended), a free PayPal Developer account with a sandbox app,
+a sandbox **personal** account (Grace) and a second sandbox **business** account (Joe), and a free Gemini API key
+(optional: without one, the built-in keyword checker is used).
+
+```bash
+git clone <this repo> && cd kinbill
+npm install
+cp .env.example .env      # Windows PowerShell: Copy-Item .env.example .env
+# fill in .env: PAYPAL_CLIENT_ID, PAYPAL_CLIENT_SECRET, PAYEE_JOE_EMAIL, GEMINI_API_KEY
+npm run check:paypal      # should print SUCCESS
+npm run dev               # open http://localhost:3000
+npm test                  # 111 tests, no network needed
+```
+
+On Grace's screen press **Connect PayPal** once and log in as the sandbox personal account. Tip: set
+`HOLD_TIMEOUT_SECONDS=120` in `.env` to see the safety timer after 2 minutes.
+
+## Build notes
 
 | Feature | State |
 | --- | --- |
@@ -18,29 +88,11 @@ Built for the PayPal "Build What's Next with PayPal and AI" hackathon. Sandbox o
 | 3. Link PayPal once (vault), pay with no browser | Done (passed in sandbox) |
 | 4. Grace's rules + database (settings, people paid before) | Done: `npm run try:rules` |
 | 5. AI scam checker (Gemini or Claude, keyword safety floor) | Done: `npm run try:ai` |
-| 6. Grace's voice screen: speak, hear it read back, yes/no, real sandbox payment | Done: `npm run dev`, open /grace.html |
-| 7. David's helper screen: held payments, reasons, approve / reject, live updates, AG Grid history | Done: open /david.html |
-| 8. Safety timer (auto-cancel), activity log, PayPal webhooks (verified) | Done (webhooks switch on after deploy) |
-| 9. Accessibility: keyboard, screen readers, contrast, text size, voice speed | Done: `npm test` includes accessibility checks |
-| 9b. Grace's safety rules: she can make them stricter, only David can loosen them | Done |
-| 9c. Visual design "Family Check": PayPal-aligned navy, light / dark / auto themes | Done |
-| 10 | Coming |
-
-## Requirements
-
-- Node.js 22.9 or newer (24 LTS recommended)
-- A free PayPal Developer account with a sandbox app and test accounts
-
-## Setup
-
-```bash
-npm install
-cp .env.example .env      # Windows PowerShell: Copy-Item .env.example .env
-# fill in .env with your sandbox values
-npm run check:paypal      # should print SUCCESS
-npm run dev               # http://localhost:3000/api/health
-npm test                  # unit tests, no network needed
-```
+| 6. Grace's voice screen | Done |
+| 7. David's helper screen, live updates, AG Grid history | Done |
+| 8. Safety timer, activity log, verified PayPal webhooks | Done |
+| 9. Accessibility, Grace's safety rules, "Family Check" design, light / dark / auto | Done |
+| 10. Online on Render | Done: https://kinbill.onrender.com |
 
 ## Feature 2: sandbox spike
 
@@ -138,7 +190,7 @@ Kin-bill is built for people with low vision, so accessibility is the product, n
 - **Type**: Atkinson Hyperlegible Next and Mono (Braille Institute, designed for low vision), served from our own server.
 - Contrast is tested for both themes in `test/a11y.test.js`; axe-core finds 0 issues on every page in light and dark.
 
-## Feature 10: online on Render
+## Feature 10: online on Render (how to deploy your own)
 
 `render.yaml` describes the whole service (free plan, Node 24, health check `/api/health`).
 

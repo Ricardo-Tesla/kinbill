@@ -89,7 +89,7 @@ The LLM never decides to move money. Treat everything Grace says as untrusted in
 9. Accessibility pass (keyboard, screen reader labels, contrast, large text). DONE: skip links, Y/N/R keys, text size + voice speed, Say it again, test/a11y.test.js, axe-core 0 violations
 9b. Safety rules screen. DONE: Grace can only tighten (POST /api/settings), David can change any (POST /api/helper/settings); blocked loosening -> RULES_BLOCKED audit + warning on David's screen
 9c. Visual design "Family Check". DONE: tokens in public/styles.css (light :root + identical dark blocks), public/theme.js (Auto/Light/Dark, data-theme + data-ag-theme-mode), fonts self-hosted from @fontsource packages at /vendor/fonts*
-10. Deploy to Render, README with setup steps, LICENSE (MIT), demo seed data. CODE READY: render.yaml, KINBILL_VAULT_ID, KINBILL_DEMO (seedDemoHistory), RENDER_EXTERNAL_URL fallback, server/rateLimit.js
+10. Deploy to Render, README with setup steps, LICENSE (MIT), demo seed data. DONE (live: https://kinbill.onrender.com, webhooks on): render.yaml, KINBILL_VAULT_ID, KINBILL_DEMO (seedDemoHistory), RENDER_EXTERNAL_URL fallback, server/rateLimit.js
 
 ## Design rules
 - Colours only through the tokens in public/styles.css; every token is defined for light and again (identically) in both dark blocks. test/a11y.test.js checks contrast for both.
