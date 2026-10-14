@@ -34,6 +34,14 @@ import {
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
+// PayPal refuses a payout whose reference was used before (it blocks double payouts for 30 days).
+// The payment number alone is not enough: a fresh database (e.g. after Render restarts) starts
+// counting at 1 again. Adding when the payment was created keeps it unique, and still the same
+// if Kin-bill retries the very same payment.
+export function payoutReference(p) {
+  return `kinbill-payout-${p.id}-${Date.parse(p.created_at).toString(36)}`;
+}
+
 export class PaymentError extends Error {
   constructor(message, code, status = 400) {
     super(message);
@@ -206,7 +214,7 @@ export function createPaymentService({
     try {
       // Forward the money to the contact.
       const payout = await paypal.sendPayout({
-        receiverEmail: contact.email, amount: p.amount, referenceId: `kinbill-payout-${p.id}`,
+        receiverEmail: contact.email, amount: p.amount, referenceId: payoutReference(p),
         note: `From ${userName}, sent with Kin-bill`,
       });
       save(p.id, { status: 'PAYING', payout_batch_id: payout.batchId });
@@ -313,7 +321,7 @@ export function createPaymentService({
 
     try {
       const payout = await paypal.sendPayout({
-        receiverEmail: contact.email, amount: p.amount, referenceId: `kinbill-payout-${p.id}`,
+        receiverEmail: contact.email, amount: p.amount, referenceId: payoutReference(p),
         note: `From ${userName}, approved by ${helperName}, sent with Kin-bill`,
       });
       save(id, { status: 'PAYING', payout_batch_id: payout.batchId });

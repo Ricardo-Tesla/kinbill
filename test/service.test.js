@@ -297,3 +297,12 @@ test('after a restart, payouts still on their way are checked again', async () =
   await fresh.idle();
   assert.equal(getPayment(db, r.payment.id).status, 'PAID');
 });
+
+test('payout reference stays unique after a fresh database reuses payment numbers', async () => {
+  const { payoutReference } = await import('../server/payments/service.js');
+  const first = payoutReference({ id: 4, created_at: '2026-10-13T10:00:00.000Z' });
+  const afterRestart = payoutReference({ id: 4, created_at: '2026-10-14T11:44:00.000Z' });
+  assert.notEqual(first, afterRestart);
+  assert.equal(first, payoutReference({ id: 4, created_at: '2026-10-13T10:00:00.000Z' }), 'same payment, same reference');
+  assert.match(first, /^kinbill-payout-4-/);
+});
