@@ -1,16 +1,19 @@
-// Feature 2 spike. Run with:  npm run spike         (all tests)
-//                    or:     npm run spike -- B    (start from test B)
+// PayPal spike (feature 2): proves in the sandbox the money paths Kin-bill depends on.
+// Run with:  npm run spike         (all tests)
+//      or:   npm run spike -- B    (start from test B)
+// Needs PAYEE_JOE_EMAIL in .env. Success: every test shows PASS under "Results".
 //
-// Proves, in the PayPal sandbox, the money paths Kin-bill depends on:
 //   Test A: CAPTURE straight to Joe          -> low-risk payment, paid now
 //   Test B: AUTHORIZE to Kin-bill -> VOID    -> David rejects, no money moves
 //   Test C: AUTHORIZE to Kin-bill -> CAPTURE -> PAYOUT to Joe  -> David approves
 //
-// Why B and C hold the money in Kin-bill's OWN account: PayPal only lets our app
+// Why B and C hold the money in Kin-bill's own account: PayPal only lets our app
 // void or capture holds that belong to our account (holds made out to Joe gave
 // PERMISSION_DENIED). So Kin-bill acts as a safety box for risky payments.
+// Test A needs a browser approval. The app pays low-risk payments to Kin-bill too and forwards
+// them with a payout, because a saved PayPal cannot be charged for Joe (see spike-vault.js).
 //
-// For each test the script prints a link. Open it, log in as your SANDBOX BUYER (Grace),
+// For each test the script prints a link. Open it, log in as your sandbox buyer (Grace),
 // approve, then come back here and press Enter. The example.com page you land on
 // afterwards looks broken; that is expected.
 
@@ -37,18 +40,31 @@ if (!joeEmail) {
   process.exit(1);
 }
 
+// Pause between payout status checks.
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
+/**
+ * Print the PayPal approval link and wait until the tester has approved it as Grace.
+ * @param {string} approveUrl  link returned by createOrder
+ * @returns {Promise<void>}
+ */
 async function waitForApproval(approveUrl) {
   console.log('\n  1) Open this link and approve as the sandbox buyer (Grace):');
   console.log('     ' + approveUrl);
   await rl.question('  2) After approving, press Enter here... ');
 }
 
+// One line describing a capture: status, amount and id.
 function summarizeCapture(capture) {
   return `${capture.status} | ${capture.amount.value} ${capture.amount.currency_code} | capture id ${capture.id}`;
 }
 
+// ---------- Tests ----------
+
+/**
+ * Test A: create a CAPTURE order made out to Joe, approve it, then capture it.
+ * @returns {Promise<boolean>} true when the capture is COMPLETED
+ */
 async function testA() {
   console.log('\n=== Test A: pay Joe $80 now (CAPTURE straight to Joe) ===');
   const { order, approveUrl } = await createOrder({
@@ -62,6 +78,10 @@ async function testA() {
   return capture.status === 'COMPLETED';
 }
 
+/**
+ * Test B: hold $600 in Kin-bill's account, then void the hold, as when David rejects.
+ * @returns {Promise<boolean>} true when the authorization ends up VOIDED
+ */
 async function testB() {
   console.log('\n=== Test B: hold $600 in Kin-bill, then VOID (David rejects) ===');
   // No payeeEmail: the hold belongs to Kin-bill's own account.
@@ -77,6 +97,10 @@ async function testB() {
   return after.status === 'VOIDED';
 }
 
+/**
+ * Test C: hold $150 in Kin-bill's account, capture it, then pay Joe with a payout, as when David approves.
+ * @returns {Promise<boolean>} true when the capture is COMPLETED and the payout reaches SUCCESS
+ */
 async function testC() {
   console.log('\n=== Test C: hold $150 in Kin-bill, CAPTURE, then PAYOUT to Joe (David approves) ===');
   const { order, approveUrl } = await createOrder({
@@ -89,13 +113,14 @@ async function testC() {
   const capture = await captureAuthorization(authorization.id);
   console.log('  Captured:', summarizeCapture(capture));
 
+  // The payout id is tied to the hold, so the same hold can never be paid out twice.
   const payout = await sendPayout({
     receiverEmail: joeEmail, amount: 150, note: 'New roofer, approved by David (Kin-bill test C)',
     referenceId: `kinbill-test-c-${authorization.id}`,
   });
   console.log('  Payout sent to Joe: batch', payout.batchId, '| status', payout.status);
 
-  // Sandbox payouts can take a minute or two; check every 5 s for up to 3 minutes.
+  // Sandbox payouts take about 1-2 minutes; check every 5 s for up to 3 minutes.
   let status = payout.status;
   for (let i = 0; i < 36 && !['SUCCESS', 'DENIED', 'CANCELED'].includes(status); i++) {
     await sleep(5000);
@@ -105,12 +130,16 @@ async function testC() {
   return capture.status === 'COMPLETED' && status === 'SUCCESS';
 }
 
+// ---------- Run ----------
+
+// Skip the tests before the letter given on the command line.
 const tests = [
   ['A', 'A: capture now (straight to Joe)', testA],
   ['B', 'B: hold in Kin-bill, then void', testB],
   ['C', 'C: hold, capture, payout to Joe', testC],
 ].filter(([letter]) => letter >= startFrom);
 
+// Stop at the first error; the tests that finished are still listed under Results.
 const results = {};
 try {
   for (const [, name, fn] of tests) results[name] = await fn();

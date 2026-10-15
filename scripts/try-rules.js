@@ -1,9 +1,12 @@
+// Try rules: shows in plain words what Grace's rules decide for everyday and scam situations.
 // Run with:  npm run try:rules
-// Shows, in plain words, what Grace's rules decide for some everyday and scam situations.
-// No PayPal, no AI: the risk scores below are examples of what the AI might return.
+// No PayPal and no AI: the risk scores below are examples of what the AI might return.
+// Success: each situation prints PAY NOW or ASK DAVID, followed by the reasons.
 
 import { decide } from '../server/rules/engine.js';
 
+// Each situation goes straight into decide(): the amount, the AI's risk score and triggers,
+// and whether Grace has paid this person before.
 const situations = [
   { story: 'Pay Joe the plumber $80 (paid him before)', amount: 80, riskScore: 5, triggers: [], knownPayee: true },
   { story: 'Pay the new gardener $40', amount: 40, riskScore: 10, triggers: [], knownPayee: false },

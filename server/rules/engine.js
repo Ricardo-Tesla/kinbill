@@ -1,4 +1,4 @@
-// Grace's rules: decides "pay now" or "ask David first".
+// Rules engine: applies Grace's rules to decide "pay now" or "ask David first".
 //
 // This is plain code on purpose. The AI only gives a risk score and reasons;
 // it can never decide to move money. A scammer coaching Grace ("tell the app
@@ -7,6 +7,9 @@
 // Golden rule: when in doubt, ask David. Holding a payment costs nothing;
 // paying a scammer can't be undone.
 
+// ---------- Deciding a payment ----------
+
+// Grace's starting rules. Each saved setting replaces the matching default.
 export const DEFAULT_SETTINGS = {
   perPaymentLimit: 100,     // payments above this amount always go to David
   riskThreshold: 40,        // AI risk score (0-100) at or above this goes to David
@@ -25,6 +28,7 @@ const TRIGGER_WORDS_FOR_GRACE = {
   COACHED: 'Someone told you what to say to Kin-bill.',
 };
 
+// Plain descriptions of each warning sign for David's screen.
 const TRIGGER_WORDS = {
   URGENCY: 'pressure to pay quickly',
   NEW_PAYEE: 'someone Grace has not paid before',
@@ -37,8 +41,10 @@ const TRIGGER_WORDS = {
 };
 
 /**
+ * Decides whether a payment can go now or must wait for David.
+ * Each rule that is not met adds a reason; any reason at all means ASK_HELPER.
  * @param {object} p
- * @param {number} p.amount        payment amount in dollars
+ * @param {number} p.amount       payment amount in dollars
  * @param {number} p.riskScore     0-100 from the AI risk agent
  * @param {string[]} p.triggers    red flags from the AI risk agent
  * @param {boolean} p.knownPayee   has Grace paid this person before?
@@ -56,11 +62,13 @@ export function decide({ amount, riskScore, triggers = [], knownPayee = false, s
   const them = payeeName && payeeName.toLowerCase() !== 'unknown' ? payeeName : 'this person';
 
   const value = Number(amount);
+  // Without a clear amount nothing can be checked safely, so stop here and hold it.
   if (!Number.isFinite(value) || value <= 0) {
     return { decision: 'ASK_HELPER', reasons: ['The amount was not clear.'], graceReasons: ['I was not sure about the amount.'] };
   }
 
   const score = Number(riskScore);
+  // A missing or broken risk score counts as risky, never as safe.
   if (!Number.isFinite(score) || score < 0 || score > 100) {
     add('The safety check did not give a clear answer.', 'I could not finish my safety check, so a second look is safer.');
   } else if (score >= s.riskThreshold) {
@@ -77,6 +85,7 @@ export function decide({ amount, riskScore, triggers = [], knownPayee = false, s
     add('Grace has not paid this person before.', `You have not paid ${them} before.`);
   }
 
+  // Normalise and de-duplicate, so odd casing or repeats cannot slip past the list.
   const flags = [...new Set((Array.isArray(triggers) ? triggers : []).map((t) => String(t).toUpperCase()))];
   for (const flag of flags.filter((f) => ALWAYS_ASK_TRIGGERS.includes(f))) {
     add(`Warning sign: ${TRIGGER_WORDS[flag]}.`, TRIGGER_WORDS_FOR_GRACE[flag]);
@@ -87,7 +96,11 @@ export function decide({ amount, riskScore, triggers = [], knownPayee = false, s
     : { decision: 'PAY_NOW', reasons: [], graceReasons: [] };
 }
 
-// Turns trigger codes into plain words for David's screen.
+/**
+ * Turns trigger codes into plain words for David's screen.
+ * @param {string[]} triggers  trigger codes, e.g. ['GIFT_CARD']
+ * @returns {string[]} descriptions; an unknown code is shown in lower case
+ */
 export function describeTriggers(triggers = []) {
   return triggers.map((t) => TRIGGER_WORDS[String(t).toUpperCase()] || String(t).toLowerCase());
 }
@@ -105,6 +118,11 @@ export const CARE_LEVELS = [
   { key: 'relaxed', label: 'Relaxed', riskThreshold: 60 },
 ];
 
+/**
+ * Names the care level for a risk threshold. Uses ranges, so values between the levels still get a label.
+ * @param {number} riskThreshold  AI risk score (0-100) at or above which David is asked
+ * @returns {string} 'Very careful', 'Careful' or 'Relaxed'
+ */
 export function careLabel(riskThreshold) {
   if (riskThreshold <= 25) return 'Very careful';
   if (riskThreshold <= 45) return 'Careful';
@@ -112,7 +130,10 @@ export function careLabel(riskThreshold) {
 }
 
 /**
- * Which proposed changes would make the rules looser than now?
+ * Lists which proposed changes would make the rules looser than now.
+ * Grace's own changes are refused when this is not empty; only David can loosen.
+ * @param {object} current   the settings in use now
+ * @param {object} proposed  only the settings being changed
  * @returns {string[]} names of the loosened settings (empty = same or stricter)
  */
 export function loosenedSettings(current, proposed) {
@@ -124,9 +145,15 @@ export function loosenedSettings(current, proposed) {
   return loosened;
 }
 
-/** Grace's rules as short, plain sentences (shown and read aloud on her screen). */
+/**
+ * Describes Grace's rules as short, plain sentences (shown and read aloud on her screen).
+ * @param {object} settings  Grace's settings (missing values use DEFAULT_SETTINGS)
+ * @param {{ helperName?: string, holdTime?: string }} [options]  helper's name and how long a hold waits
+ * @returns {string[]} one sentence per rule
+ */
 export function describeRules(settings, { helperName = 'David', holdTime = '48 hours' } = {}) {
   const s = { ...DEFAULT_SETTINGS, ...settings };
+  // Whole amounts read better aloud: "100 dollars", not "100.00 dollars".
   const dollars = Number.isInteger(s.perPaymentLimit) ? s.perPaymentLimit : s.perPaymentLimit.toFixed(2);
   return [
     `Payments over ${dollars} dollars wait for ${helperName}.`,

@@ -1,14 +1,19 @@
-// Reads settings from environment variables (loaded from .env by Node's --env-file flag).
+// Config: reads settings from environment variables (loaded from .env by Node's --env-file flag).
 // Keeping all config in one place makes it easy to see what the app needs.
+// It also refuses to start against live PayPal, so real money can never move by mistake.
 
 export const config = {
   port: Number(process.env.PORT) || 3000,
+  // Sandbox app credentials from developer.paypal.com.
   paypal: {
     clientId: process.env.PAYPAL_CLIENT_ID || '',
     clientSecret: process.env.PAYPAL_CLIENT_SECRET || '',
     apiBase: process.env.PAYPAL_API_BASE || 'https://api-m.sandbox.paypal.com',
   },
+  // Sandbox PayPal email for the demo contacts added on first start.
   payeeJoeEmail: process.env.PAYEE_JOE_EMAIL || '',
+  // How long a hold waits for David before it is voided. Default 48 h, well inside
+  // PayPal's 3-day honor period; set a few minutes for demos.
   holdTimeoutSeconds: Number(process.env.HOLD_TIMEOUT_SECONDS) || 172800,
   // Where the app is reachable; PayPal sends Grace back here after connecting her PayPal.
   // On Render, RENDER_EXTERNAL_URL is set automatically (e.g. https://kinbill.onrender.com).
@@ -28,11 +33,15 @@ export const config = {
   sweepIntervalSeconds: Number(process.env.SWEEP_INTERVAL_SECONDS) || 30,
 };
 
-// Safety net: refuse to run against live PayPal by accident.
+// Safety net: refuse to start against live PayPal, so a wrong .env can never move real money.
 if (!config.paypal.apiBase.includes('sandbox')) {
   throw new Error('Kin-bill only runs against the PayPal SANDBOX. Check PAYPAL_API_BASE in .env.');
 }
 
+/**
+ * Tells whether the PayPal sandbox client id and secret are both set.
+ * @returns {boolean} true when both are set
+ */
 export function isPayPalConfigured() {
   return Boolean(config.paypal.clientId && config.paypal.clientSecret);
 }
